@@ -1,0 +1,148 @@
+.playback-controls {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  gap: 16px;
+  background-color: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border);
+  user-select: none;
+}
+
+/* ── Transport buttons ─────────────────────────────────────────────────────── */
+
+.playback-controls__transport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.playback-controls__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 0.15s, opacity 0.15s;
+  color: var(--color-bg-base);
+}
+
+.playback-controls__btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.playback-controls__btn--primary {
+  width: 36px;
+  height: 36px;
+  background-color: var(--color-primary);
+  color: var(--color-bg-base);
+}
+
+.playback-controls__btn--primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.playback-controls__btn--secondary {
+  width: 28px;
+  height: 28px;
+  background-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+.playback-controls__btn--secondary:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+}
+
+/* ── Seek area ─────────────────────────────────────────────────────────────── */
+
+.playback-controls__seek-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.playback-controls__time {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: center;
+}
+
+.playback-controls__slider-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Sliders ───────────────────────────────────────────────────────────────── */
+
+.playback-controls__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  /* Two-tone track: filled portion uses primary, remainder uses border color */
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0%,
+    var(--color-primary) var(--fill-pct, 0%),
+    var(--color-border) var(--fill-pct, 0%),
+    var(--color-border) 100%
+  );
+}
+
+.playback-controls__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.playback-controls__slider::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+
+.playback-controls__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Volume ────────────────────────────────────────────────────────────────── */
+
+.playback-controls__volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  width: 140px;
+  color: var(--color-text-muted);
+}
+
+.playback-controls__volume svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.playback-controls__slider--volume {
+  width: 100px;
+}

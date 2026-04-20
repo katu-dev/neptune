@@ -1,0 +1,57 @@
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  flex-shrink: 0;
+}
+
+.tag-filter-bar__clear {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.tag-filter-bar__clear:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.tag-filter-bar__pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.tag-filter-bar__pill:hover {
+  opacity: 0.85;
+}
+
+.tag-filter-bar__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tag-filter-bar__pill--active .tag-filter-bar__dot {
+  background: #fff !important;
+}

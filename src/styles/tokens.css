@@ -1,0 +1,33 @@
+:root {
+  /* Primary palette */
+  --color-primary: #6366f1;
+  --color-primary-hover: #818cf8;
+  --color-primary-muted: #3730a3;
+
+  /* Backgrounds */
+  --color-bg-base: #0f0f13;
+  --color-bg-surface: #18181f;
+  --color-bg-elevated: #22222d;
+
+  /* Borders */
+  --color-border: #2e2e3d;
+
+  /* Text */
+  --color-text-primary: #f1f1f5;
+  --color-text-secondary: #9898b0;
+  --color-text-muted: #55556a;
+
+  /* Status */
+  --color-error: #f87171;
+  --color-success: #34d399;
+
+  /* Waveform */
+  --color-waveform-fill: #6366f1;
+  --color-waveform-played: #818cf8;
+  --color-waveform-bg: #18181f;
+
+  /* Typography */
+  --font-family-base: "Inter", system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-size-base: 14px;
+}

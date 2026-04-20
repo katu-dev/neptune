@@ -1,0 +1,43 @@
+[package]
+name = "music-file-explorer"
+version = "0.1.0"
+description = "Neptune - A cross-platform music file explorer"
+authors = []
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "music_file_explorer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "music-file-explorer"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["default"] }
+tauri-plugin-dialog = "2"
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+lofty = "0.21"
+symphonia = { version = "0.5", features = ["all"] }
+rustfft = "6"
+cpal = "0.15"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2"
+
+[dev-dependencies]
+proptest = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

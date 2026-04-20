@@ -1,0 +1,73 @@
+.db-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-modal {
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  padding: 28px 32px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+}
+
+.db-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 12px;
+}
+
+.db-modal__body {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.db-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.db-modal__btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  transition: opacity 0.15s;
+}
+
+.db-modal__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.db-modal__btn--cancel {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+.db-modal__btn--cancel:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.db-modal__btn--reset {
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.db-modal__btn--reset:hover:not(:disabled) {
+  opacity: 0.85;
+}

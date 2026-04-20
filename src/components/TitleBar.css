@@ -1,0 +1,51 @@
+.titlebar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background-color: var(--color-bg-surface);
+}
+
+.titlebar__search {
+  flex: 1;
+  max-width: 360px;
+  height: 28px;
+  padding: 0 10px;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.titlebar__search::placeholder {
+  color: var(--color-text-muted);
+}
+
+.titlebar__search:focus {
+  border-color: var(--color-primary);
+}
+
+.titlebar__settings {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.titlebar__settings:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+}

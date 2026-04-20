@@ -1,0 +1,62 @@
+.waveform-view {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: var(--color-bg-surface);
+  overflow: hidden;
+}
+
+.waveform-view__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: ew-resize;
+}
+
+/* Hairline at center — visible before waveform loads */
+.waveform-view::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(255,255,255,0.08);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.waveform-view__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+
+.waveform-view__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: waveform-spin 0.7s linear infinite;
+}
+
+@keyframes waveform-spin {
+  to { transform: rotate(360deg); }
+}
+
+.waveform-view__empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}

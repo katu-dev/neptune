@@ -1,0 +1,182 @@
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg-base);
+  overflow: hidden;
+}
+
+/* Search bar */
+.file-explorer__search {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+}
+
+.file-explorer__search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.file-explorer__search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.file-explorer__search-input:focus {
+  border-color: var(--color-primary);
+}
+
+/* Virtualized list container */
+.file-explorer__list {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Row base */
+.file-explorer__row {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding-right: 12px;
+  cursor: pointer;
+  user-select: none;
+  border-left: 3px solid transparent;
+  box-sizing: border-box;
+  outline: none;
+  transition: background-color 0.1s;
+}
+
+.file-explorer__row:hover {
+  background-color: var(--color-bg-elevated);
+}
+
+.file-explorer__row--selected {
+  background-color: var(--color-primary-muted);
+  border-left-color: var(--color-primary);
+}
+
+.file-explorer__row--focused {
+  outline: 1px solid var(--color-primary);
+  outline-offset: -1px;
+}
+
+/* Folder row */
+.file-explorer__row--folder {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* Track row */
+.file-explorer__row--track {
+  color: var(--color-text-primary);
+}
+
+/* Missing track */
+.file-explorer__row--missing .file-explorer__track-title {
+  color: var(--color-text-muted);
+}
+
+/* Expand toggle */
+.file-explorer__toggle {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  margin-right: 4px;
+}
+
+/* Folder icon */
+.file-explorer__folder-icon {
+  flex-shrink: 0;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+/* Track info */
+.file-explorer__track-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-explorer__track-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-explorer__track-subtitle {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* Missing indicator */
+.file-explorer__missing-icon {
+  flex-shrink: 0;
+  color: var(--color-error);
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+/* Empty state */
+.file-explorer__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Decode error badge */
+.file-explorer__decode-error-badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-error);
+  background-color: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* Tag dots on track rows */
+.file-explorer__tag-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.file-explorer__tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

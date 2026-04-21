@@ -18,6 +18,7 @@ pub struct Track {
     pub duration_secs: Option<f64>,
     pub cover_art_path: Option<String>,
     pub missing: bool,
+    pub bpm: Option<f32>,
 }
 
 /// A node in the directory tree shown in the File Explorer.

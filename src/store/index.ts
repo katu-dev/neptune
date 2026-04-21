@@ -18,6 +18,7 @@ export interface Track {
   duration_secs: number | null;
   cover_art_path: string | null;
   missing: boolean;
+  bpm: number | null;
 }
 
 export type PlaybackState = "playing" | "paused" | "stopped";

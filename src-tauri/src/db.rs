@@ -64,9 +64,30 @@ fn create_schema(conn: &Connection) -> Result<(), AppError> {
             tag_id   INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
             PRIMARY KEY (track_id, tag_id)
         );
+
+        CREATE TABLE IF NOT EXISTS queue (
+            position  INTEGER PRIMARY KEY,
+            track_id  INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS queue_state (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         ",
     )
     .map_err(|e| AppError::Database(format!("Schema creation failed: {}", e)))?;
+
+    // Add bpm column to tracks if it doesn't exist yet (SQLite has no IF NOT EXISTS for ALTER TABLE)
+    let bpm_exists: bool = conn
+        .prepare("PRAGMA table_info(tracks)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name| name.map(|n| n == "bpm").unwrap_or(false));
+
+    if !bpm_exists {
+        conn.execute("ALTER TABLE tracks ADD COLUMN bpm REAL", [])
+            .map_err(|e| AppError::Database(format!("Failed to add bpm column: {}", e)))?;
+    }
 
     Ok(())
 }
@@ -161,7 +182,7 @@ pub fn update_track(conn: &Connection, track: &Track) -> Result<(), AppError> {
 pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, path, dir_path, filename, title, artist, album, album_artist,
-                year, genre, track_number, disc_number, duration_secs, cover_art_path, missing
+                year, genre, track_number, disc_number, duration_secs, cover_art_path, missing, bpm
          FROM tracks
          ORDER BY dir_path, filename",
     )?;
@@ -184,6 +205,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
                 duration_secs: row.get(12)?,
                 cover_art_path: row.get(13)?,
                 missing: row.get::<_, i64>(14)? != 0,
+                bpm: row.get(15)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -195,7 +217,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
 pub fn get_track_by_id(conn: &Connection, id: i64) -> Result<Option<Track>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, path, dir_path, filename, title, artist, album, album_artist,
-                year, genre, track_number, disc_number, duration_secs, cover_art_path, missing
+                year, genre, track_number, disc_number, duration_secs, cover_art_path, missing, bpm
          FROM tracks WHERE id = ?1",
     )?;
 
@@ -216,6 +238,7 @@ pub fn get_track_by_id(conn: &Connection, id: i64) -> Result<Option<Track>, AppE
             duration_secs: row.get(12)?,
             cover_art_path: row.get(13)?,
             missing: row.get::<_, i64>(14)? != 0,
+            bpm: row.get(15)?,
         })
     })?;
 
@@ -417,6 +440,7 @@ mod tests {
             duration_secs: Some(180.5),
             cover_art_path: None,
             missing: false,
+            bpm: None,
         }
     }
 

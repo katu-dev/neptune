@@ -1,22 +1,24 @@
 use std::path::Path;
 
 use crate::{
+    crossfade::CrossfadeSettings,
     db,
     player::Player,
+    queue::QueueManager,
     scanner,
     spectrogram,
     types::{AppError, AppState, DirNode, ScanResult, SpectrogramData, Tag, Track, WaveformData},
+    watcher::Watcher,
     waveform,
 };
 use std::sync::Mutex;
 use tauri::{Emitter, State};
-
-/// Scan a directory for audio files, index them, and emit `scan_progress` events.
-/// Also persists the path to root_directories in app_state.
+/// Also persists the path to root_directories in app_state and registers it with the watcher.
 #[tauri::command]
 pub async fn scan_directory(
     path: String,
     app_handle: tauri::AppHandle,
+    watcher: State<'_, Mutex<Watcher>>,
 ) -> Result<ScanResult, AppError> {
     // Persist this path as a root directory
     let conn = db::init_db(&app_handle)?;
@@ -25,19 +27,39 @@ pub async fn scan_directory(
         state.root_directories.push(path.clone());
         db::save_app_state(&conn, &state)?;
     }
+
+    // Register with the watcher.
+    {
+        let w = watcher.lock().unwrap();
+        if let Err(e) = w.add_directory(&path) {
+            eprintln!("[commands] watcher.add_directory failed: {}", e);
+        }
+    }
+
     scanner::scan_directory(path, app_handle).await
 }
 
-/// Remove a root directory from the persisted list (does not delete tracks).
+/// Remove a root directory from the persisted list and stop watching it.
 #[tauri::command]
 pub async fn remove_root_directory(
     path: String,
     app_handle: tauri::AppHandle,
+    watcher: State<'_, Mutex<Watcher>>,
 ) -> Result<(), AppError> {
     let conn = db::init_db(&app_handle)?;
     let mut state = db::get_app_state(&conn)?;
     state.root_directories.retain(|d| d != &path);
-    db::save_app_state(&conn, &state)
+    db::save_app_state(&conn, &state)?;
+
+    // Unregister from the watcher.
+    {
+        let w = watcher.lock().unwrap();
+        if let Err(e) = w.remove_directory(&path) {
+            eprintln!("[commands] watcher.remove_directory failed: {}", e);
+        }
+    }
+
+    Ok(())
 }
 
 /// Return all tracks in the library.
@@ -583,6 +605,155 @@ pub async fn get_all_track_tags(
     db::get_all_track_tag_ids(&conn)
 }
 
+// ---------------------------------------------------------------------------
+// Watcher commands
+// ---------------------------------------------------------------------------
+
+/// Add a directory to the watcher at runtime (without scanning).
+#[tauri::command]
+pub fn add_watch_directory(
+    path: String,
+    watcher: State<'_, Mutex<Watcher>>,
+) -> Result<(), AppError> {
+    let w = watcher.lock().unwrap();
+    w.add_directory(&path)
+}
+
+/// Remove a directory from the watcher at runtime.
+#[tauri::command]
+pub fn remove_watch_directory(
+    path: String,
+    watcher: State<'_, Mutex<Watcher>>,
+) -> Result<(), AppError> {
+    let w = watcher.lock().unwrap();
+    w.remove_directory(&path)
+}
+
+// ---------------------------------------------------------------------------
+// Crossfade / gapless commands
+// ---------------------------------------------------------------------------
+
+/// Set the crossfade duration in seconds (clamped to [0.0, 10.0]).
+/// Persists the value to the database under `crossfade_secs`.
+#[tauri::command]
+pub fn set_crossfade_duration(
+    secs: f32,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let clamped = secs.clamp(0.0, 10.0);
+    let conn = db::init_db(&app_handle)?;
+    conn.execute(
+        "INSERT INTO app_state (key, value) VALUES ('crossfade_secs', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![clamped.to_string()],
+    )
+    .map_err(|e| AppError::Database(e.to_string()))?;
+    Ok(())
+}
+
+/// Enable or disable gapless playback.
+/// Persists the value to the database under `gapless_enabled`.
+#[tauri::command]
+pub fn set_gapless_enabled(
+    enabled: bool,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let conn = db::init_db(&app_handle)?;
+    conn.execute(
+        "INSERT INTO app_state (key, value) VALUES ('gapless_enabled', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![enabled.to_string()],
+    )
+    .map_err(|e| AppError::Database(e.to_string()))?;
+    Ok(())
+}
+
+/// Return the current crossfade settings from the database.
+#[tauri::command]
+pub fn get_crossfade_settings(app_handle: tauri::AppHandle) -> Result<CrossfadeSettings, AppError> {
+    let conn = db::init_db(&app_handle)?;
+
+    let crossfade_secs: f32 = conn
+        .query_row(
+            "SELECT value FROM app_state WHERE key = 'crossfade_secs'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+
+    let gapless_enabled: bool = conn
+        .query_row(
+            "SELECT value FROM app_state WHERE key = 'gapless_enabled'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(false);
+
+    Ok(CrossfadeSettings {
+        crossfade_secs,
+        gapless_enabled,
+    })
+}
+
+/// Append a track to the end of the queue.
+#[tauri::command]
+pub fn queue_add(
+    track_id: i64,
+    queue: State<'_, QueueManager>,
+) -> Result<(), AppError> {
+    queue.add_to_end(track_id)
+}
+
+/// Insert a track immediately after the current playing position.
+#[tauri::command]
+pub fn queue_add_next(
+    track_id: i64,
+    queue: State<'_, QueueManager>,
+) -> Result<(), AppError> {
+    queue.add_next(track_id)
+}
+
+/// Remove the track at the given index from the queue.
+#[tauri::command]
+pub fn queue_remove(
+    index: usize,
+    queue: State<'_, QueueManager>,
+) -> Result<(), AppError> {
+    queue.remove(index)
+}
+
+/// Move a track from one position to another in the queue.
+#[tauri::command]
+pub fn queue_move(
+    from: usize,
+    to: usize,
+    queue: State<'_, QueueManager>,
+) -> Result<(), AppError> {
+    queue.move_track(from, to)
+}
+
+/// Clear all tracks from the queue.
+#[tauri::command]
+pub fn queue_clear(queue: State<'_, QueueManager>) -> Result<(), AppError> {
+    queue.clear()
+}
+
+/// Shuffle all tracks after the current playing position.
+#[tauri::command]
+pub fn queue_shuffle(queue: State<'_, QueueManager>) -> Result<(), AppError> {
+    queue.shuffle_after_current()
+}
+
+/// Return the current queue state.
+#[tauri::command]
+pub fn get_queue(queue: State<'_, QueueManager>) -> crate::queue::QueueState {
+    queue.state()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,6 +776,7 @@ mod tests {
             duration_secs: None,
             cover_art_path: None,
             missing: false,
+            bpm: None,
         }
     }
 

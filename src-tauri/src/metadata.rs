@@ -107,6 +107,7 @@ pub fn extract_metadata(path: &Path, cache_dir: Option<&Path>) -> Result<Track, 
         duration_secs,
         cover_art_path,
         missing: false,
+        bpm: None,
     })
 }
 

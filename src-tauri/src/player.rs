@@ -16,6 +16,9 @@ use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 use tauri::{AppHandle, Emitter};
 
+use crate::crossfade::Crossfader;
+use crate::db;
+use crate::queue::QueueManager;
 use crate::types::AppError;
 
 // ---------------------------------------------------------------------------
@@ -124,6 +127,13 @@ pub struct Player {
 impl Player {
     /// Spawn the background decode/playback thread and return a `Player`.
     pub fn new(app_handle: AppHandle) -> Self {
+        Self::new_with_queue(app_handle, None)
+    }
+
+    /// Spawn the background decode/playback thread with an optional `QueueManager`.
+    /// When a track ends and the queue has a next track, the player will
+    /// automatically begin playing it.
+    pub fn new_with_queue(app_handle: AppHandle, queue_manager: Option<QueueManager>) -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel::<ControlMsg>(32);
         let state = Arc::new(Mutex::new(PlayerState::Stopped));
         let current_track_id: Arc<Mutex<Option<i64>>> = Arc::new(Mutex::new(None));
@@ -132,7 +142,7 @@ impl Player {
         let track_id_clone = Arc::clone(&current_track_id);
 
         std::thread::spawn(move || {
-            player_loop(rx, app_handle, state_clone, track_id_clone);
+            player_loop(rx, app_handle, state_clone, track_id_clone, queue_manager);
         });
 
         Player {
@@ -164,12 +174,40 @@ fn player_loop(
     app_handle: AppHandle,
     state: Arc<Mutex<PlayerState>>,
     current_track_id: Arc<Mutex<Option<i64>>>,
+    queue_manager: Option<QueueManager>,
 ) {
     let audio_buf: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(48000 * 2)));
     let volume: Arc<Mutex<f32>> = Arc::new(Mutex::new(1.0));
     let stream_active: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
     let mut _stream: Option<Stream> = None;
     let mut decode_ctx: Option<DecodeContext> = None;
+
+    // Crossfader state — load persisted settings from DB.
+    let mut crossfader = Crossfader::new();
+    if let Ok(conn) = db::init_db(&app_handle) {
+        if let Ok(secs_str) = conn.query_row(
+            "SELECT value FROM app_state WHERE key = 'crossfade_secs'",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            if let Ok(v) = secs_str.parse::<f32>() {
+                crossfader.set_duration(v);
+            }
+        }
+        if let Ok(gapless_str) = conn.query_row(
+            "SELECT value FROM app_state WHERE key = 'gapless_enabled'",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            if let Ok(v) = gapless_str.parse::<bool>() {
+                crossfader.set_gapless(v);
+            }
+        }
+    }
+    // Track whether we've already started pre-decoding the next track.
+    let mut next_track_prefetch_started = false;
+    // The next track's id (used during crossfade transition).
+    let mut next_track_id: Option<i64> = None;
 
     // Wall-clock anchor for smooth position interpolation in the frontend.
     // We store the last *confirmed* decode position + the instant it was set.
@@ -227,6 +265,9 @@ fn player_loop(
                     _stream = None;
                     decode_ctx = None;
                     audio_buf.lock().unwrap().clear();
+                    crossfader.reset();
+                    next_track_prefetch_started = false;
+                    next_track_id = None;
 
                     match open_decode_context(&path, start_pos) {
                         Ok(ctx) => {
@@ -302,6 +343,9 @@ fn player_loop(
                     _stream = None;
                     decode_ctx = None;
                     audio_buf.lock().unwrap().clear();
+                    crossfader.reset();
+                    next_track_prefetch_started = false;
+                    next_track_id = None;
                     *position_secs.lock().unwrap() = 0.0;
                     *play_started_at.lock().unwrap() = None;
                     *current_track_id.lock().unwrap() = None;
@@ -343,7 +387,7 @@ fn player_loop(
 
                 if buf_len < target {
                     match decode_next_packet(ctx) {
-                        Ok(Some(samples)) => {
+                        Ok(Some(mut samples)) => {
                             // Update the decode position anchor.
                             let frames = samples.len() / ctx.channels as usize;
                             let delta = frames as f64 / ctx.sample_rate as f64;
@@ -353,6 +397,102 @@ fn player_loop(
                                 // Reset the wall-clock anchor so interpolation
                                 // stays accurate after each decode burst.
                                 *play_started_at.lock().unwrap() = Some(Instant::now());
+                            }
+
+                            // --- Crossfade / gapless pre-decode logic ---
+                            if crossfader.gapless_enabled && !next_track_prefetch_started {
+                                let pos = *position_secs.lock().unwrap();
+                                let dur = ctx.duration_secs;
+                                let threshold = if crossfader.duration_secs > 0.0 {
+                                    dur - crossfader.duration_secs as f64
+                                } else {
+                                    // Gapless: start pre-decoding 2 seconds before end.
+                                    dur - 2.0
+                                };
+                                if pos >= threshold && dur > 0.0 {
+                                    // Peek at the next queue track without advancing.
+                                    let next_id_opt = queue_manager.as_ref().and_then(|qm| {
+                                        let qs = qm.state();
+                                        let next_idx = match qs.current_index {
+                                            Some(ci) => ci + 1,
+                                            None => 0,
+                                        };
+                                        qs.track_ids.get(next_idx).copied()
+                                    });
+
+                                    if let Some(nid) = next_id_opt {
+                                        next_track_prefetch_started = true;
+                                        next_track_id = Some(nid);
+
+                                        // Pre-decode the next track in a background thread.
+                                        let next_buf_arc = Arc::clone(&crossfader.next_track_buffer);
+                                        let app_handle_clone = app_handle.clone();
+                                        let crossfade_dur = crossfader.duration_secs;
+                                        let sample_rate = ctx.sample_rate;
+                                        let channels = ctx.channels as usize;
+
+                                        std::thread::spawn(move || {
+                                            // Look up the track path.
+                                            let conn = match db::init_db(&app_handle_clone) {
+                                                Ok(c) => c,
+                                                Err(e) => {
+                                                    eprintln!("[crossfade] DB init error: {e}");
+                                                    return;
+                                                }
+                                            };
+                                            let track = match db::get_track_by_id(&conn, nid) {
+                                                Ok(Some(t)) if !t.missing => t,
+                                                Ok(_) => {
+                                                    eprintln!("[crossfade] next track {nid} missing or not found");
+                                                    return;
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[crossfade] DB error for track {nid}: {e}");
+                                                    return;
+                                                }
+                                            };
+
+                                            // Decode enough samples for the crossfade duration.
+                                            let samples_needed = if crossfade_dur > 0.0 {
+                                                (crossfade_dur * sample_rate as f32) as usize * channels * 2
+                                            } else {
+                                                // Gapless: decode a generous buffer (4 seconds).
+                                                sample_rate as usize * channels * 4
+                                            };
+
+                                            match open_decode_context(&track.path, 0.0) {
+                                                Ok(mut next_ctx) => {
+                                                    let mut decoded: Vec<f32> = Vec::with_capacity(samples_needed);
+                                                    while decoded.len() < samples_needed {
+                                                        match decode_next_packet(&mut next_ctx) {
+                                                            Ok(Some(pkt)) => decoded.extend_from_slice(&pkt),
+                                                            Ok(None) => break,
+                                                            Err(e) => {
+                                                                eprintln!("[crossfade] decode error for next track: {e}");
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                    *next_buf_arc.lock().unwrap() = decoded;
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[crossfade] failed to open next track {nid}: {e}");
+                                                }
+                                            }
+                                        });
+
+                                        // If crossfade duration > 0, begin the fade immediately.
+                                        if crossfader.duration_secs > 0.0 {
+                                            crossfader.fading = true;
+                                            crossfader.fade_position = 0.0;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Apply crossfade processing if active.
+                            if crossfader.is_fading() && crossfader.duration_secs > 0.0 {
+                                crossfader.process(&mut samples, ctx.sample_rate, ctx.channels as usize);
                             }
 
                             // Emit real FFT spectrum + per-channel RMS at ~60fps
@@ -366,16 +506,148 @@ fn player_loop(
                             audio_buf.lock().unwrap().extend_from_slice(&samples);
                         }
                         Ok(None) => {
+                            // Gapless: if we have pre-decoded next-track samples, flush them
+                            // into the audio buffer before transitioning.
+                            if crossfader.gapless_enabled && next_track_prefetch_started {
+                                let remaining: Vec<f32> = {
+                                    let mut nb = crossfader.next_track_buffer.lock().unwrap();
+                                    std::mem::take(&mut *nb)
+                                };
+                                if !remaining.is_empty() {
+                                    audio_buf.lock().unwrap().extend_from_slice(&remaining);
+                                }
+                            }
+
                             let buf_empty = audio_buf.lock().unwrap().is_empty();
                             if buf_empty {
-                                *stream_active.lock().unwrap() = false;
-                                _stream = None;
-                                decode_ctx = None;
-                                *position_secs.lock().unwrap() = 0.0;
-                                *play_started_at.lock().unwrap() = None;
-                                *current_track_id.lock().unwrap() = None;
-                                *state.lock().unwrap() = PlayerState::Stopped;
-                                emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                // Determine the next track: use pre-fetched id if available,
+                                // otherwise advance the queue.
+                                let next_id_to_play = if crossfader.gapless_enabled && next_track_id.is_some() {
+                                    // Advance the queue to the pre-fetched track.
+                                    let _ = queue_manager.as_ref().map(|qm| qm.advance());
+                                    next_track_id.take()
+                                } else {
+                                    queue_manager.as_ref().and_then(|qm| {
+                                        match qm.advance() {
+                                            Ok(Some(tid)) => Some(tid),
+                                            Ok(None) => None,
+                                            Err(e) => {
+                                                eprintln!("[player] queue advance error: {e}");
+                                                None
+                                            }
+                                        }
+                                    })
+                                };
+
+                                // Reset crossfade state for the next track.
+                                crossfader.reset();
+                                next_track_prefetch_started = false;
+                                next_track_id = None;
+
+                                if let Some(next_id) = next_id_to_play {
+                                    // Look up the path for the next track and start playing.
+                                    let conn_result = db::init_db(&app_handle);
+                                    match conn_result {
+                                        Ok(conn) => {
+                                            match db::get_track_by_id(&conn, next_id) {
+                                                Ok(Some(track)) if !track.missing => {
+                                                    *stream_active.lock().unwrap() = false;
+                                                    _stream = None;
+                                                    decode_ctx = None;
+                                                    audio_buf.lock().unwrap().clear();
+
+                                                    match open_decode_context(&track.path, 0.0) {
+                                                        Ok(ctx) => {
+                                                            let dur = ctx.duration_secs;
+                                                            *duration_secs.lock().unwrap() = dur;
+                                                            *position_secs.lock().unwrap() = 0.0;
+                                                            *play_started_at.lock().unwrap() = Some(Instant::now());
+                                                            *current_track_id.lock().unwrap() = Some(next_id);
+
+                                                            match build_cpal_stream(
+                                                                ctx.sample_rate,
+                                                                ctx.channels,
+                                                                Arc::clone(&audio_buf),
+                                                                Arc::clone(&volume),
+                                                                Arc::clone(&stream_active),
+                                                            ) {
+                                                                Ok(stream) => {
+                                                                    *stream_active.lock().unwrap() = true;
+                                                                    let _ = stream.play();
+                                                                    _stream = Some(stream);
+                                                                    decode_ctx = Some(ctx);
+                                                                    *state.lock().unwrap() = PlayerState::Playing;
+                                                                    emit_state_changed(&app_handle, PlayerState::Playing, Some(next_id));
+                                                                }
+                                                                Err(e) => {
+                                                                    eprintln!("[player] cpal stream error for queue track: {e}");
+                                                                    *current_track_id.lock().unwrap() = None;
+                                                                    *play_started_at.lock().unwrap() = None;
+                                                                    *state.lock().unwrap() = PlayerState::Stopped;
+                                                                    emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("[player] decode error for queue track {next_id}: {e}");
+                                                            // Req 8.7: skip undecoded track, try next.
+                                                            let _ = queue_manager.as_ref().map(|qm| qm.advance());
+                                                            *current_track_id.lock().unwrap() = None;
+                                                            *play_started_at.lock().unwrap() = None;
+                                                            *state.lock().unwrap() = PlayerState::Stopped;
+                                                            emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                                        }
+                                                    }
+                                                }
+                                                Ok(_) => {
+                                                    // Track missing or not found — skip and try next (req 8.7).
+                                                    eprintln!("[player] queue track {next_id} missing, skipping");
+                                                    let _ = queue_manager.as_ref().map(|qm| qm.advance());
+                                                    *stream_active.lock().unwrap() = false;
+                                                    _stream = None;
+                                                    decode_ctx = None;
+                                                    *position_secs.lock().unwrap() = 0.0;
+                                                    *play_started_at.lock().unwrap() = None;
+                                                    *current_track_id.lock().unwrap() = None;
+                                                    *state.lock().unwrap() = PlayerState::Stopped;
+                                                    emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[player] DB error looking up queue track: {e}");
+                                                    *stream_active.lock().unwrap() = false;
+                                                    _stream = None;
+                                                    decode_ctx = None;
+                                                    *position_secs.lock().unwrap() = 0.0;
+                                                    *play_started_at.lock().unwrap() = None;
+                                                    *current_track_id.lock().unwrap() = None;
+                                                    *state.lock().unwrap() = PlayerState::Stopped;
+                                                    emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("[player] DB init error: {e}");
+                                            *stream_active.lock().unwrap() = false;
+                                            _stream = None;
+                                            decode_ctx = None;
+                                            *position_secs.lock().unwrap() = 0.0;
+                                            *play_started_at.lock().unwrap() = None;
+                                            *current_track_id.lock().unwrap() = None;
+                                            *state.lock().unwrap() = PlayerState::Stopped;
+                                            emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                        }
+                                    }
+                                } else {
+                                    // No next track — stop.
+                                    *stream_active.lock().unwrap() = false;
+                                    _stream = None;
+                                    decode_ctx = None;
+                                    *position_secs.lock().unwrap() = 0.0;
+                                    *play_started_at.lock().unwrap() = None;
+                                    *current_track_id.lock().unwrap() = None;
+                                    *state.lock().unwrap() = PlayerState::Stopped;
+                                    emit_state_changed(&app_handle, PlayerState::Stopped, None);
+                                }
                             }
                         }
                         Err(e) => {

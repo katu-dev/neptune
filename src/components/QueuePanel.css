@@ -239,3 +239,29 @@
 .queue-panel__list::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
 }
+
+/* ─── Shuffle button ─────────────────────────────────────────────────────── */
+
+.queue-panel__shuffle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.queue-panel__shuffle-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+}
+
+.queue-panel__shuffle-btn svg {
+  width: 16px;
+  height: 16px;
+}

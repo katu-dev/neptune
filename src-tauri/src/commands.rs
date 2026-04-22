@@ -121,6 +121,9 @@ pub async fn get_track_metadata(
 }
 
 /// Return the raw bytes of the cover art for a track, or `None` if absent.
+///
+/// Fast path: read from the pre-extracted file at `cover_art_path`.
+/// Slow path: read embedded picture bytes directly from the audio file via lofty.
 #[tauri::command]
 pub async fn get_cover_art(
     track_id: i64,
@@ -130,14 +133,29 @@ pub async fn get_cover_art(
     let track = db::get_track_by_id(&conn, track_id)?
         .ok_or(AppError::TrackNotFound(track_id))?;
 
-    match track.cover_art_path {
-        None => Ok(None),
-        Some(art_path) => {
-            let bytes = std::fs::read(Path::new(&art_path))
-                .map_err(|e| AppError::Io(e.to_string()))?;
-            Ok(Some(bytes))
+    // Fast path: cover already extracted to disk.
+    if let Some(ref art_path) = track.cover_art_path {
+        if let Ok(bytes) = std::fs::read(Path::new(art_path.as_str())) {
+            if !bytes.is_empty() {
+                return Ok(Some(bytes));
+            }
         }
     }
+
+    // Slow path: read embedded picture directly from the audio file.
+    let audio_path = std::path::PathBuf::from(&track.path);
+    let bytes = tokio::task::spawn_blocking(move || -> Option<Vec<u8>> {
+        use lofty::file::TaggedFileExt;
+        let tagged = lofty::read_from_path(&audio_path).ok()?;
+        let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
+        let picture = tag.pictures().first()?;
+        let data = picture.data().to_vec();
+        if data.is_empty() { None } else { Some(data) }
+    })
+    .await
+    .map_err(|e| AppError::Decode(e.to_string()))?;
+
+    Ok(bytes)
 }
 
 /// Delete all tracks from the library and reset app state.

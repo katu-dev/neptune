@@ -527,7 +527,8 @@ fn player_loop(
                             if last_spectrum_emit.elapsed() >= Duration::from_millis(16) {
                                 let bins = compute_spectrum(&samples, ctx.channels as usize);
                                 let (rms_l, rms_r) = compute_rms(&samples, ctx.channels as usize);
-                                let _ = app_handle.emit("spectrum_data", SpectrumDataPayload { bins, rms_l, rms_r });
+                                let scope = compute_scope(&samples, ctx.channels as usize);
+                                let _ = app_handle.emit("spectrum_data", SpectrumDataPayload { bins, rms_l, rms_r, scope });
                                 last_spectrum_emit = Instant::now();
                             }
 
@@ -767,6 +768,7 @@ struct SpectrumDataPayload {
     bins: Vec<f32>, // SPECTRUM_BINS normalised values 0–1
     rms_l: f32,     // RMS of left channel (or mono), 0–1
     rms_r: f32,     // RMS of right channel (or mono if mono), 0–1
+    scope: Vec<f32>, // interleaved L/R time-domain samples for oscilloscope (256 frames × 2ch)
 }
 
 /// Compute per-channel RMS from interleaved samples, normalised to [0, 1].
@@ -797,6 +799,27 @@ fn compute_rms(samples: &[f32], channels: usize) -> (f32, f32) {
 
     // Normalise: RMS of a full-scale sine is ~0.707; scale so that maps to ~1.0
     (rms_l.min(1.0) * 1.414, rms_r.min(1.0) * 1.414)
+}
+
+/// Downsample interleaved samples to SCOPE_FRAMES frames of stereo (or mono→stereo).
+/// Returns interleaved [L0, R0, L1, R1, ...] normalised to [-1, 1].
+const SCOPE_FRAMES: usize = 256;
+
+fn compute_scope(samples: &[f32], channels: usize) -> Vec<f32> {
+    if samples.is_empty() || channels == 0 {
+        return vec![0.0; SCOPE_FRAMES * 2];
+    }
+    let total_frames = samples.len() / channels;
+    let step = (total_frames / SCOPE_FRAMES).max(1);
+    let mut out = Vec::with_capacity(SCOPE_FRAMES * 2);
+    for i in 0..SCOPE_FRAMES {
+        let frame = (i * step).min(total_frames - 1);
+        let l = samples[frame * channels];
+        let r = if channels >= 2 { samples[frame * channels + 1] } else { l };
+        out.push(l.clamp(-1.0, 1.0));
+        out.push(r.clamp(-1.0, 1.0));
+    }
+    out
 }
 
 struct DecodeContext {

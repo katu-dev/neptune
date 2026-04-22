@@ -36,7 +36,13 @@ function IconDragHandle() {
   );
 }
 
-// ─── Sortable Queue Item ──────────────────────────────────────────────────────
+function IconShuffle() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+    </svg>
+  );
+}
 
 interface SortableQueueItemProps {
   track: Track;
@@ -144,53 +150,42 @@ export default function QueuePanel() {
   const tracks = useMusicStore((s) => s.tracks);
   const addToast = useMusicStore((s) => s.addToast);
 
-  // Resolve track objects from IDs
   const queueTracks = queueTrackIds
     .map((id) => tracks.find((t) => t.id === id))
     .filter((t): t is Track => t !== undefined);
 
-  // Drop zones for FileExplorer tracks
-  const { setNodeRef: setTopDropRef, isOver: isOverTop } = useDroppable({
-    id: "queue-drop-top",
-  });
+  const { setNodeRef: setTopDropRef, isOver: isOverTop } = useDroppable({ id: "queue-drop-top" });
+  const { setNodeRef: setBottomDropRef, isOver: isOverBottom } = useDroppable({ id: "queue-drop-bottom" });
 
-  const { setNodeRef: setBottomDropRef, isOver: isOverBottom } = useDroppable({
-    id: "queue-drop-bottom",
-  });
+  useEffect(() => {}, []);
 
-  // Handle drops from FileExplorer
-  useEffect(() => {
-    // This is handled by the parent DndContext in App.tsx
-    // We just need to provide the drop zones
-  }, []);
-
-  // Handle remove
   const handleRemove = async (index: number) => {
-    try {
-      await invoke("queue_remove", { index });
-    } catch (err) {
-      console.error("Failed to remove from queue:", err);
-      addToast("Failed to remove track from queue");
-    }
+    try { await invoke("queue_remove", { index }); }
+    catch (err) { console.error("Failed to remove from queue:", err); addToast("Failed to remove track from queue"); }
   };
 
-  // Handle play next
   const handlePlayNext = async (trackId: number) => {
-    try {
-      await invoke("queue_add_next", { trackId });
-    } catch (err) {
-      console.error("Failed to add track to queue:", err);
-      addToast("Failed to add track to queue");
-    }
+    try { await invoke("queue_add_next", { trackId }); }
+    catch (err) { console.error("Failed to add track to queue:", err); addToast("Failed to add track to queue"); }
+  };
+
+  const handleShuffle = async () => {
+    try { await invoke("queue_shuffle"); addToast("Queue shuffled"); }
+    catch (err) { console.error("Failed to shuffle queue:", err); addToast("Failed to shuffle queue"); }
   };
 
   return (
     <div className="queue-panel">
       <div className="queue-panel__header">
-        <h2 className="queue-panel__title">Queue</h2>
-        <span className="queue-panel__count">
-          {queueTracks.length} {queueTracks.length === 1 ? "track" : "tracks"}
-        </span>
+        <div>
+          <h2 className="queue-panel__title">Queue</h2>
+          <span className="queue-panel__count">
+            {queueTracks.length} {queueTracks.length === 1 ? "track" : "tracks"}
+          </span>
+        </div>
+        <button className="queue-panel__shuffle-btn" onClick={handleShuffle} title="Shuffle queue">
+          <IconShuffle />
+        </button>
       </div>
 
       {/* Top drop zone for FileExplorer tracks */}

@@ -206,6 +206,18 @@ export interface MusicStore {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
 
+  // Loop mode & shuffle
+  loopMode: "none" | "all" | "one";
+  setLoopMode: (mode: "none" | "all" | "one") => void;
+  shuffleEnabled: boolean;
+  setShuffleEnabled: (enabled: boolean) => void;
+
+  // Favorites
+  favoriteTrackIds: Set<number>;
+  toggleFavorite: (trackId: number) => void;
+  showFavoritesOnly: boolean;
+  setShowFavoritesOnly: (show: boolean) => void;
+
   // Active folder navigation
   activeFolder: string | null;
   setActiveFolder: (path: string | null) => void;
@@ -330,6 +342,30 @@ export const useMusicStore = create<MusicStore>((set) => ({
   // Active folder navigation
   activeFolder: null,
   setActiveFolder: (path) => set({ activeFolder: path }),
+
+  // Loop mode & shuffle
+  loopMode: "none",
+  setLoopMode: (mode) => set({ loopMode: mode }),
+  shuffleEnabled: false,
+  setShuffleEnabled: (enabled) => set({ shuffleEnabled: enabled }),
+
+  // Favorites — persisted in localStorage via JSON
+  favoriteTrackIds: (() => {
+    try {
+      const raw = localStorage.getItem("neptune_favorites");
+      return raw ? new Set<number>(JSON.parse(raw)) : new Set<number>();
+    } catch { return new Set<number>(); }
+  })(),
+  toggleFavorite: (trackId) =>
+    set((state) => {
+      const next = new Set(state.favoriteTrackIds);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      try { localStorage.setItem("neptune_favorites", JSON.stringify([...next])); } catch {}
+      return { favoriteTrackIds: next };
+    }),
+  showFavoritesOnly: false,
+  setShowFavoritesOnly: (show) => set({ showFavoritesOnly: show }),
 }));
 
 // Register all Tauri event listeners and wire them to the store

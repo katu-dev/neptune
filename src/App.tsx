@@ -17,10 +17,7 @@ import Sidebar from "./components/Sidebar";
 import TitleBar from "./components/TitleBar";
 import FileExplorer from "./components/FileExplorer";
 import MetadataPanel from "./components/MetadataPanel";
-import PlaybackControls from "./components/PlaybackControls";
-import WaveformView from "./components/WaveformView";
-import SpectrumVisualizer from "./components/SpectrumVisualizer";
-import VuMeter from "./components/VuMeter";
+import BottomBar from "./components/BottomBar";
 import ToastContainer from "./components/Toast";
 import DbCorruptionModal from "./components/DbCorruptionModal";
 import AmbientBackground from "./components/AmbientBackground";
@@ -197,10 +194,7 @@ function App() {
           sidebar={<Sidebar />}
           fileExplorer={<FileExplorer />}
           metadataPanel={<MetadataPanel />}
-          waveformBar={<WaveformView />}
-          spectrum={<SpectrumVisualizer />}
-          playbackControls={<PlaybackControls />}
-          vuMeter={<VuMeter />}
+          bottomBar={<BottomBar />}
         />
         <NowPlayingView />
         <CommandPalette />

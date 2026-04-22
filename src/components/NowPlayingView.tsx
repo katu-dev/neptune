@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useDroppable } from "@dnd-kit/core";
 import { useMusicStore } from "../store/index";
 import AmbientBackground from "./AmbientBackground";
@@ -41,58 +41,53 @@ export default function NowPlayingView() {
   const closeNowPlaying = useMusicStore((s) => s.closeNowPlaying);
   const ambientBgEnabled = useMusicStore((s) => s.ambientBgEnabled);
   const selectedTrackId = useMusicStore((s) => s.selectedTrackId);
+  const queueTrackIds = useMusicStore((s) => s.queueTrackIds);
+  const currentQueueIndex = useMusicStore((s) => s.currentQueueIndex);
   const tracks = useMusicStore((s) => s.tracks);
 
-  const currentTrack = tracks.find((t) => t.id === selectedTrackId) ?? null;
+  const playingTrackId =
+    currentQueueIndex !== null && queueTrackIds[currentQueueIndex] !== undefined
+      ? queueTrackIds[currentQueueIndex]
+      : selectedTrackId;
 
-  // Drag-and-drop zone for adding tracks to queue
-  const { setNodeRef, isOver } = useDroppable({
-    id: "now-playing-drop",
-  });
+  const currentTrack = tracks.find((t) => t.id === playingTrackId) ?? null;
 
-  // Cover art: prefer the file path from the track, fall back to fetching raw bytes
+  const { setNodeRef, isOver } = useDroppable({ id: "now-playing-drop" });
+
   const [coverArtUrl, setCoverArtUrl] = useState<string | null>(null);
+  const prevBlobRef = useRef<string | null>(null);
+
+  const revokePrev = () => {
+    if (prevBlobRef.current?.startsWith("blob:")) {
+      URL.revokeObjectURL(prevBlobRef.current);
+      prevBlobRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!currentTrack) {
+      revokePrev();
       setCoverArtUrl(null);
       return;
     }
 
-    // Fast path: cover_art_path already extracted to disk
-    if (currentTrack.cover_art_path) {
-      setCoverArtUrl(convertFileSrc(currentTrack.cover_art_path));
-      return;
-    }
-
-    // Slow path: fetch raw bytes from backend and build a blob URL
-    let cancelled = false;
+    const cancelled = { v: false };
     invoke<number[] | null>("get_cover_art", { trackId: currentTrack.id })
       .then((bytes) => {
-        if (cancelled || !bytes || bytes.length === 0) return;
-        const blob = new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
+        if (cancelled.v || !bytes || bytes.length === 0) return;
+        const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+        const blob = new Blob([new Uint8Array(bytes)], { type: isPng ? "image/png" : "image/jpeg" });
         const url = URL.createObjectURL(blob);
-        setCoverArtUrl((prev) => {
-          if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-          return url;
-        });
+        revokePrev();
+        prevBlobRef.current = url;
+        setCoverArtUrl(url);
       })
-      .catch(() => {});
+      .catch(() => setCoverArtUrl(null));
 
-    return () => {
-      cancelled = true;
-    };
-  }, [currentTrack?.id, currentTrack?.cover_art_path]);
+    return () => { cancelled.v = true; };
+  }, [currentTrack?.id]);
 
-  // Clean up blob URL on unmount
-  useEffect(() => {
-    return () => {
-      setCoverArtUrl((prev) => {
-        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-        return null;
-      });
-    };
-  }, []);
+  useEffect(() => () => revokePrev(), []);
 
   // Close on Escape key
   useEffect(() => {

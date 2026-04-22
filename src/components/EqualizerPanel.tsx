@@ -85,6 +85,7 @@ export default function EqualizerPanel() {
               aria-valuemin={-12}
               aria-valuemax={12}
               aria-valuenow={eqGains[i]}
+              // @ts-expect-error: 'orient' is a non-standard but widely supported attribute for vertical sliders
               orient="vertical"
             />
             <span className="eq-band__label">{band.label}</span>

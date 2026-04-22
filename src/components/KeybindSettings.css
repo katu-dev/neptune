@@ -1,0 +1,120 @@
+.keybind-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.keybind-settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keybind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keybind-row__action {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.keybind-row__combo {
+  min-width: 90px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-family: monospace;
+  font-size: 0.75rem;
+  text-align: center;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.keybind-row__combo--recording {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  animation: keybind-pulse 1s ease-in-out infinite;
+}
+
+@keyframes keybind-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.keybind-row__record-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.keybind-row__record-btn:hover {
+  background-color: var(--color-bg-elevated);
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.keybind-row__record-btn--active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: rgba(var(--color-primary-rgb, 99, 102, 241), 0.1);
+}
+
+.keybind-settings__reset-btn {
+  margin-top: 4px;
+}
+
+/* Conflict dialog */
+.keybind-conflict-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.keybind-conflict-dialog {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  max-width: 320px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.keybind-conflict-dialog__message {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.keybind-conflict-dialog__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.keybind-conflict-dialog__cancel {
+  color: var(--color-text-secondary);
+}

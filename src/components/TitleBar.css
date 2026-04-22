@@ -5,6 +5,8 @@
   gap: 8px;
   padding: 0 16px;
   background-color: var(--color-bg-surface);
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .titlebar__search {
@@ -20,6 +22,7 @@
   font-size: 0.8125rem;
   outline: none;
   transition: border-color 0.15s;
+  -webkit-app-region: no-drag;
 }
 
 .titlebar__search::placeholder {
@@ -43,9 +46,44 @@
   font-size: 1rem;
   cursor: pointer;
   transition: color 0.15s, background-color 0.15s;
+  -webkit-app-region: no-drag;
 }
 
 .titlebar__settings:hover {
   color: var(--color-text-primary);
   background-color: var(--color-bg-elevated);
+}
+
+/* Window controls */
+.titlebar__window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__wc-btn {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.titlebar__wc-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+}
+
+.titlebar__wc-btn--close:hover {
+  background-color: #c0392b;
+  color: #fff;
 }

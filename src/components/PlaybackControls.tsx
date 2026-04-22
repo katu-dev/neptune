@@ -82,13 +82,11 @@ export default function PlaybackControls() {
   // ── Playback actions ──────────────────────────────────────────────────────
 
   async function handlePlayPause() {
-    if (playbackState === "playing") {
-      await invoke("pause");
+    // Backend `pause` command toggles: playing→pause, paused→resume, stopped→no-op
+    if (playbackState === "stopped" && selectedTrackId !== null) {
+      await invoke("play_track", { trackId: selectedTrackId });
     } else {
-      // paused or stopped — resume/start via play_track
-      if (selectedTrackId !== null) {
-        await invoke("play_track", { trackId: selectedTrackId });
-      }
+      await invoke("pause");
     }
   }
 

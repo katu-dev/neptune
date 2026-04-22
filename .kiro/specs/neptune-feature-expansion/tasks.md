@@ -61,7 +61,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
 - [x] 5. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Implement `eq.rs` — 8-Band Equalizer DSP
+- [x] 6. Implement `eq.rs` — 8-Band Equalizer DSP
   - Create `src-tauri/src/eq.rs` with `Equalizer` and `BiquadFilter` structs
   - Implement `new(sample_rate)`: initializes 8 bands at the specified center frequencies with 0 dB gain
   - Implement `set_gain(band, gain_db)` and `recompute_coefficients(band)` using the Audio EQ Cookbook peaking EQ formula
@@ -113,7 +113,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
     - **Property 15: Crossfade duration persistence round-trip**
     - **Validates: Requirements 8.5**
 
-- [ ] 9. Implement `bpm.rs` — Auto BPM Detection
+- [x] 9. Implement `bpm.rs` — Auto BPM Detection
   - Create `src-tauri/src/bpm.rs` with `BpmAnalyzer` using a `rayon::ThreadPool` of 2 threads
   - Implement `schedule(track_id, path)`: spawns a pool task that calls `analyze(path)`
   - Implement `analyze`: decode to mono f32 via Symphonia → `onset_strength` (512-sample hop RMS energy delta) → `autocorrelation_bpm` (lag search for [40, 250] BPM range) → round to 1 decimal → store NULL if out of range
@@ -129,7 +129,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
     - **Property 20: BPM range clamping to NULL**
     - **Validates: Requirements 10.6**
 
-- [ ] 10. Implement `genre.rs` — Genre Detection
+- [x] 10. Implement `genre.rs` — Genre Detection
   - Create `src-tauri/src/genre.rs` with `GenreClassifier`, `Genre` enum, and `AudioFeatures` struct
   - Implement `schedule(track_id, path)`: spawns a pool task that calls `classify(path)`
   - Implement `extract_features`: decode audio, compute spectral centroid, spectral rolloff (85th percentile), and zero-crossing rate averaged over 1-second frames
@@ -150,10 +150,10 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
     - **Property 23: Audio feature extraction produces finite values**
     - **Validates: Requirements 11.2**
 
-- [ ] 11. Checkpoint — Ensure all tests pass
+- [x] 11. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement `keybinds.rs` — Keyboard Shortcuts
+- [x] 12. Implement `keybinds.rs` — Keyboard Shortcuts
   - Create `src-tauri/src/keybinds.rs` with `KeybindMap` and `KeybindRegistry` structs
   - Implement `KeybindMap::defaults()` with the 8 default bindings from the design; implement `get_action`, `set`, `has_conflict`
   - Implement `KeybindRegistry::new`, `load_from_db`, `save_to_db`, `dispatch`, `reset_to_defaults`
@@ -165,7 +165,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
     - **Property 6: Keybind map persistence round-trip**
     - **Validates: Requirements 4.3**
 
-- [ ] 13. Implement `discord.rs` — Discord Rich Presence
+- [x] 13. Implement `discord.rs` — Discord Rich Presence
   - Create `src-tauri/src/discord.rs` with the `DiscordPresence` struct
   - Implement `new()`, `set_enabled(enabled)`, `update_playing(title, artist, start_timestamp)`, `update_paused()`, `clear()`, `try_connect()`, `schedule_reconnect(app_handle)`
   - `try_connect` returns `false` silently when Discord is not running; all methods are no-ops when not connected
@@ -174,23 +174,23 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - Extend `player.rs` `emit_state_changed` path to call `discord.update_playing/paused/clear` based on playback state
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8_
 
-- [ ] 14. Wire audio pipeline in `player.rs`
+- [x] 14. Wire audio pipeline in `player.rs`
   - Instantiate `Equalizer`, `Panner`, and `Crossfader` inside the player background thread
   - After each decoded packet, call `eq.process`, then `panner.process`, then `crossfader.process` in sequence before writing to the CPAL ring buffer
   - Pass `Equalizer` and `Panner` handles to the Tauri command handlers so `set_eq_gain` and `set_pan` can mutate them from the command thread (use `Arc<Mutex<_>>`)
   - _Requirements: 6.1, 7.1, 8.1_
 
-- [ ] 15. Checkpoint — Ensure all tests pass
+- [x] 15. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Extend Zustand store with new slices
+- [x] 16. Extend Zustand store with new slices
   - In `src/store/index.ts`, add slices for: `queue` (`queueTrackIds`, `currentQueueIndex`), `eq` (`eqGains`, `eqBypassed`), `pan` (`panValue`), `crossfade` (`crossfadeSecs`, `gaplessEnabled`), `keybinds` (`keybindMap`), `discovery` (`recommendations`), `ambientBg` (`enabled`, `currentArtUrl`), `discordPresence` (`enabled`), and `nowPlayingOpen` with `openNowPlaying`/`closeNowPlaying` actions
   - Register event listeners for `queue_changed`, `bpm_ready`, `genre_ready`, and `keybind_action` in `initEventListeners`
   - Register `library_changed` listener to call `get_library` and refresh `tracks`
   - Add a `window` `keydown` listener that builds a combo string and calls `invoke('dispatch_keybind', { combo })`
   - _Requirements: 1.7, 2.10, 4.2, 10.5, 11.5_
 
-- [ ] 17. Implement `AmbientBackground.tsx`
+- [x] 17. Implement `AmbientBackground.tsx`
   - Create `src/components/AmbientBackground.tsx` as a `position: fixed; inset: 0; z-index: -1` div
   - Render two overlapping `<img>` elements for cross-fade: `prevArtUrl` fades out, `currentArtUrl` fades in over 600 ms using CSS `opacity` transition
   - Apply `filter: blur(40px) brightness(0.4)` and `will-change: opacity` to both images
@@ -198,7 +198,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - Render nothing when `ambientBgEnabled` is `false` in the store
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
 
-- [ ] 18. Implement `NowPlayingView.tsx`
+- [x] 18. Implement `NowPlayingView.tsx`
   - Create `src/components/NowPlayingView.tsx` as a `position: fixed` full-screen overlay
   - Render `<AmbientBackground />` (when enabled), a close button, cover art `<img>` (min 300×300), track title/artist/album/duration, and the existing `PlaybackControls` component
   - Show a placeholder SVG and empty metadata when `currentTrack` is null
@@ -207,7 +207,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - Mount the component in `App.tsx`, conditionally shown when `nowPlayingOpen` is `true`
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
 
-- [ ] 19. Implement `QueuePanel.tsx` with drag-and-drop
+- [x] 19. Implement `QueuePanel.tsx` with drag-and-drop
   - Create `src/components/QueuePanel.tsx` that renders the queue from the `queue` store slice
   - Wrap the list in `<DndContext>` and `<SortableContext>`; each row is a `<SortableItem>` using `useSortable`
   - On `onDragEnd`, call `invoke('queue_move', { from, to })`; on remove button click, call `invoke('queue_remove', { index })`; on "Play Next" button click, call `invoke('queue_add_next', { trackId })`
@@ -215,30 +215,30 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - Render a `DragOverlay` with a semi-transparent ghost row; render a highlighted drop indicator `<div>` between items using `isOver`
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 13.1, 13.2, 13.3, 13.4, 13.6, 13.7_
 
-- [ ] 20. Add `useDraggable` to `FileExplorer` track rows
+- [x] 20. Add `useDraggable` to `FileExplorer` track rows
   - In the existing `FileExplorer` component, wrap each track row with `useDraggable` from `@dnd-kit/core`, passing `{ id: track.id, data: { trackId: track.id } }`
   - Render a `DragOverlay` at the `App.tsx` level (shared with `QueuePanel`) to show the ghost row during drag
   - _Requirements: 13.3, 13.4, 13.5, 13.6_
 
-- [ ] 21. Implement `EqualizerPanel.tsx`
+- [x] 21. Implement `EqualizerPanel.tsx`
   - Create `src/components/EqualizerPanel.tsx` with 8 vertical `<input type="range" min="-12" max="12" step="0.5">` sliders, one per band
   - Each slider label shows the center frequency (60 Hz, 170 Hz, 310 Hz, 600 Hz, 1 kHz, 3 kHz, 6 kHz, 14 kHz)
   - On slider change, call `invoke('set_eq_gain', { band, gainDb })` and update the `eq.eqGains` store slice
   - Add a "Bypass" toggle that calls `invoke('set_eq_bypassed', { bypassed })`; add a "Reset" button that calls `invoke('reset_eq')` and sets all sliders to 0
   - _Requirements: 6.2, 6.3, 6.4, 6.7, 6.8_
 
-- [ ] 22. Implement `PannerControl.tsx`
+- [x] 22. Implement `PannerControl.tsx`
   - Create `src/components/PannerControl.tsx` with a horizontal `<input type="range" min="-1" max="1" step="0.01">` slider
   - Show "L" and "R" labels at the ends; add a center reset button that sets pan to 0
   - On slider change, call `invoke('set_pan', { value })` and update the `pan.panValue` store slice
   - _Requirements: 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 23. Implement `CrossfadeSettings.tsx`
+- [x] 23. Implement `CrossfadeSettings.tsx`
   - Create `src/components/CrossfadeSettings.tsx` with a gapless toggle and a crossfade duration slider (`min="0.5" max="10" step="0.5"`)
   - On toggle change, call `invoke('set_gapless_enabled', { enabled })`; on slider change, call `invoke('set_crossfade_duration', { secs })`
   - _Requirements: 8.3, 8.4, 8.8_
 
-- [ ] 24. Implement `KeybindSettings.tsx`
+- [x] 24. Implement `KeybindSettings.tsx`
   - Create `src/components/KeybindSettings.tsx` rendered inside `SettingsPanel`
   - Render a row per action showing action name, current key combo, and a "Record" button
   - Clicking "Record" enters capture mode: the next `keydown` event is captured and sent to `invoke('set_keybind', { action, combo })`
@@ -246,7 +246,7 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - On "Reset to Defaults" button click, call `invoke('reset_keybinds')` and refresh the store
   - _Requirements: 4.5, 4.6, 4.7, 4.8_
 
-- [ ] 25. Implement `CommandPalette.tsx`
+- [x] 25. Implement `CommandPalette.tsx`
   - Create `src/components/CommandPalette.tsx` as a modal overlay
   - Build a Fuse.js index from all tracks, folder paths, and registered action names; rebuild when `tracks` changes in the store
   - On each keystroke, run `fuse.search(query).slice(0, 20)` and render results in a list
@@ -255,14 +255,14 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
   - Mount in `App.tsx`; open when `keybind_action` event fires with `command_palette`
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10_
 
-- [ ] 26. Implement `DiscoveryFeed.tsx`
+- [x] 26. Implement `DiscoveryFeed.tsx`
   - Create `src/components/DiscoveryFeed.tsx` that calls `invoke('get_recommendations', { trackId: selectedTrackId })` when `selectedTrackId` changes
   - Render up to 20 track rows with title, artist, and a "Play Next" button
   - On "Play Next" click, call `invoke('queue_add_next', { trackId })` and `invoke('play_track', { trackId })`
   - Show a loading state while fetching; show an empty state when no recommendations are available
   - _Requirements: 9.1, 9.3, 9.4, 9.5, 9.6, 9.7_
 
-- [ ] 27. Implement `get_recommendations` Tauri command
+- [x] 27. Implement `get_recommendations` Tauri command
   - In `src-tauri/src/commands.rs` (or a new `discovery.rs`), implement the `get_recommendations` async command
   - Load current track and all non-missing tracks from DB; for each candidate compute BPM score, genre score, and tag score; compute `similarity = 0.4*bpm + 0.3*genre + 0.3*tag`; sort descending; return top 20
   - Implement fallback: when all scores are 0, return tracks by same `album_artist`, then same `album`, then random
@@ -282,17 +282,17 @@ All Rust code goes in `src-tauri/src/`. All React code goes in `src/components/`
     - **Property 18: Discovery similarity formula correctness**
     - **Validates: Requirements 9.2**
 
-- [ ] 28. Checkpoint — Ensure all tests pass
+- [x] 28. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 29. Wire all new modules into `lib.rs`
+- [x] 29. Wire all new modules into `lib.rs`
   - Declare all new modules (`mod watcher`, `mod queue`, `mod eq`, `mod panner`, `mod crossfade`, `mod bpm`, `mod genre`, `mod discord`, `mod keybinds`) in `src-tauri/src/lib.rs`
   - In the Tauri `Builder`, register all new Tauri commands in `.invoke_handler(tauri::generate_handler![...])`
   - In the `setup` closure, initialize and register all managed state: `Watcher`, `QueueManager`, `KeybindRegistry`, `DiscordPresence`; load persisted state for EQ, panner, crossfade, and keybinds from DB
   - Call `bpm_analyzer.schedule` and `genre_classifier.schedule` for any tracks in the library that are missing BPM or genre at startup
   - _Requirements: 1.1, 4.4, 6.6, 7.7, 8.6_
 
-- [ ] 30. Final checkpoint — Ensure all tests pass
+- [x] 30. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

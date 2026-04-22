@@ -5,16 +5,20 @@ import { useMusicStore } from "../store/index";
 import SettingsPanel from "./SettingsPanel";
 import FoldersPanel from "./FoldersPanel";
 import TagsPanel from "./TagsPanel";
+import QueuePanel from "./QueuePanel";
+import DiscoveryFeed from "./DiscoveryFeed";
 import logoUrl from "../assets/logo.svg";
 import "./Sidebar.css";
 
-const NAV_ITEMS = ["Library", "Folders", "Tags", "Settings"] as const;
+const NAV_ITEMS = ["Library", "Queue", "Discover", "Now Playing", "Folders", "Tags", "Settings"] as const;
 
 export default function Sidebar() {
-  const { addToast, bumpTreeVersion } = useMusicStore();
+  const { addToast, bumpTreeVersion, openNowPlaying } = useMusicStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [discoverOpen, setDiscoverOpen] = useState(false);
 
   async function handleAddFolder() {
     try {
@@ -37,6 +41,9 @@ export default function Sidebar() {
     if (item === "Folders") setFoldersOpen(true);
     else if (item === "Tags") setTagsOpen(true);
     else if (item === "Settings") setSettingsOpen(true);
+    else if (item === "Queue") setQueueOpen(true);
+    else if (item === "Discover") setDiscoverOpen(true);
+    else if (item === "Now Playing") openNowPlaying();
   }
 
   return (
@@ -50,7 +57,7 @@ export default function Sidebar() {
           {NAV_ITEMS.map((item) => (
             <li
               key={item}
-              className={`sidebar__nav-item${item === "Library" ? " sidebar__nav-item--active" : ""}`}
+              className="sidebar__nav-item"
               onClick={() => handleNavClick(item)}
             >
               {item}
@@ -66,6 +73,34 @@ export default function Sidebar() {
       {foldersOpen && <FoldersPanel onClose={() => setFoldersOpen(false)} />}
       {tagsOpen && <TagsPanel onClose={() => setTagsOpen(false)} />}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {queueOpen && (
+        <div className="sidebar-panel-overlay" role="dialog" aria-modal="true" aria-label="Queue">
+          <div className="sidebar-panel-overlay__backdrop" onClick={() => setQueueOpen(false)} />
+          <div className="sidebar-panel-overlay__panel">
+            <div className="sidebar-panel-overlay__header">
+              <span className="sidebar-panel-overlay__title">Queue</span>
+              <button className="sidebar-panel-overlay__close" onClick={() => setQueueOpen(false)} aria-label="Close queue">✕</button>
+            </div>
+            <div className="sidebar-panel-overlay__body">
+              <QueuePanel />
+            </div>
+          </div>
+        </div>
+      )}
+      {discoverOpen && (
+        <div className="sidebar-panel-overlay" role="dialog" aria-modal="true" aria-label="Discover">
+          <div className="sidebar-panel-overlay__backdrop" onClick={() => setDiscoverOpen(false)} />
+          <div className="sidebar-panel-overlay__panel">
+            <div className="sidebar-panel-overlay__header">
+              <span className="sidebar-panel-overlay__title">Discover</span>
+              <button className="sidebar-panel-overlay__close" onClick={() => setDiscoverOpen(false)} aria-label="Close discover">✕</button>
+            </div>
+            <div className="sidebar-panel-overlay__body">
+              <DiscoveryFeed />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

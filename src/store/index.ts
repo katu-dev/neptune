@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 // Track type matching the Rust backend
 export interface Track {
@@ -58,6 +59,35 @@ interface WaveformReadyPayload {
 interface SpectrogramReadyPayload {
   track_id: number;
 }
+
+interface QueueChangedPayload {
+  queue: number[];
+  current_index: number | null;
+}
+
+interface BpmReadyPayload {
+  track_id: number;
+  bpm: number | null;
+}
+
+interface GenreReadyPayload {
+  track_id: number;
+  genre: string;
+}
+
+interface KeybindActionPayload {
+  action: string;
+}
+
+interface LibraryChangedPayload {}
+
+// New types
+export interface QueueState {
+  trackIds: number[];
+  currentIndex: number | null;
+}
+
+export type KeybindMap = Record<string, string>;
 
 // Toast notification
 export interface ToastMessage {
@@ -126,6 +156,59 @@ export interface MusicStore {
   decodeErrorTrackIds: Set<number>;
   addDecodeError: (trackId: number) => void;
   clearDecodeError: (trackId: number) => void;
+
+  // Queue
+  queueTrackIds: number[];
+  currentQueueIndex: number | null;
+  setQueue: (ids: number[], index: number | null) => void;
+
+  // EQ
+  eqGains: number[];
+  eqBypassed: boolean;
+  setEqGains: (gains: number[]) => void;
+  setEqBypassed: (bypassed: boolean) => void;
+
+  // Pan
+  panValue: number;
+  setPanValue: (value: number) => void;
+
+  // Crossfade
+  crossfadeSecs: number;
+  gaplessEnabled: boolean;
+  setCrossfadeSecs: (secs: number) => void;
+  setGaplessEnabled: (enabled: boolean) => void;
+
+  // Keybinds
+  keybindMap: KeybindMap;
+  setKeybindMap: (map: KeybindMap) => void;
+
+  // Discovery
+  recommendations: Track[];
+  setRecommendations: (tracks: Track[]) => void;
+
+  // Ambient background
+  ambientBgEnabled: boolean;
+  ambientBgArtUrl: string | null;
+  setAmbientBgEnabled: (enabled: boolean) => void;
+  setAmbientBgArtUrl: (url: string | null) => void;
+
+  // Discord presence
+  discordPresenceEnabled: boolean;
+  setDiscordPresenceEnabled: (enabled: boolean) => void;
+
+  // Now Playing panel
+  nowPlayingOpen: boolean;
+  openNowPlaying: () => void;
+  closeNowPlaying: () => void;
+
+  // Command Palette
+  commandPaletteOpen: boolean;
+  openCommandPalette: () => void;
+  closeCommandPalette: () => void;
+
+  // Active folder navigation
+  activeFolder: string | null;
+  setActiveFolder: (path: string | null) => void;
 }
 
 export const useMusicStore = create<MusicStore>((set) => ({
@@ -194,6 +277,59 @@ export const useMusicStore = create<MusicStore>((set) => ({
       next.delete(trackId);
       return { decodeErrorTrackIds: next };
     }),
+
+  // Queue
+  queueTrackIds: [],
+  currentQueueIndex: null,
+  setQueue: (ids, index) => set({ queueTrackIds: ids, currentQueueIndex: index }),
+
+  // EQ
+  eqGains: [0, 0, 0, 0, 0, 0, 0, 0],
+  eqBypassed: false,
+  setEqGains: (gains) => set({ eqGains: gains }),
+  setEqBypassed: (bypassed) => set({ eqBypassed: bypassed }),
+
+  // Pan
+  panValue: 0,
+  setPanValue: (value) => set({ panValue: value }),
+
+  // Crossfade
+  crossfadeSecs: 2,
+  gaplessEnabled: true,
+  setCrossfadeSecs: (secs) => set({ crossfadeSecs: secs }),
+  setGaplessEnabled: (enabled) => set({ gaplessEnabled: enabled }),
+
+  // Keybinds
+  keybindMap: {},
+  setKeybindMap: (map) => set({ keybindMap: map }),
+
+  // Discovery
+  recommendations: [],
+  setRecommendations: (tracks) => set({ recommendations: tracks }),
+
+  // Ambient background
+  ambientBgEnabled: false,
+  ambientBgArtUrl: null,
+  setAmbientBgEnabled: (enabled) => set({ ambientBgEnabled: enabled }),
+  setAmbientBgArtUrl: (url) => set({ ambientBgArtUrl: url }),
+
+  // Discord presence
+  discordPresenceEnabled: false,
+  setDiscordPresenceEnabled: (enabled) => set({ discordPresenceEnabled: enabled }),
+
+  // Now Playing panel
+  nowPlayingOpen: false,
+  openNowPlaying: () => set({ nowPlayingOpen: true }),
+  closeNowPlaying: () => set({ nowPlayingOpen: false }),
+
+  // Command Palette
+  commandPaletteOpen: false,
+  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  closeCommandPalette: () => set({ commandPaletteOpen: false }),
+
+  // Active folder navigation
+  activeFolder: null,
+  setActiveFolder: (path) => set({ activeFolder: path }),
 }));
 
 // Register all Tauri event listeners and wire them to the store
@@ -222,5 +358,103 @@ export async function initEventListeners(): Promise<void> {
 
   await listen<SpectrogramReadyPayload>("spectrogram_ready", (event) => {
     useMusicStore.setState({ spectrogramReadyTrackId: event.payload.track_id });
+  });
+
+  await listen<LibraryChangedPayload>("library_changed", async () => {
+    try {
+      const tracks = await invoke<Track[]>("get_library");
+      useMusicStore.setState((s) => ({ tracks, treeVersion: s.treeVersion + 1 }));
+    } catch (_) {}
+  });
+
+  await listen<QueueChangedPayload>("queue_changed", (event) => {
+    useMusicStore.setState({
+      queueTrackIds: event.payload.queue,
+      currentQueueIndex: event.payload.current_index,
+    });
+  });
+
+  await listen<BpmReadyPayload>("bpm_ready", (event) => {
+    const { track_id, bpm } = event.payload;
+    useMusicStore.setState((state) => ({
+      tracks: state.tracks.map((t) =>
+        t.id === track_id ? { ...t, bpm } : t
+      ),
+    }));
+  });
+
+  await listen<GenreReadyPayload>("genre_ready", (event) => {
+    const { track_id, genre } = event.payload;
+    useMusicStore.setState((state) => ({
+      tracks: state.tracks.map((t) =>
+        t.id === track_id ? { ...t, genre } : t
+      ),
+    }));
+  });
+
+  await listen<KeybindActionPayload>("keybind_action", (event) => {
+    const { action } = event.payload;
+    const store = useMusicStore.getState();
+    switch (action) {
+      case "play_pause":
+        invoke("pause").catch(() => {});
+        break;
+      case "next_track":
+        invoke("play_next").catch(() => {});
+        break;
+      case "prev_track":
+        invoke("play_previous").catch(() => {});
+        break;
+      case "volume_up": {
+        const vol = Math.min(1.0, store.volume + 0.05);
+        store.setVolume(vol);
+        invoke("set_volume", { level: vol }).catch(() => {});
+        break;
+      }
+      case "volume_down": {
+        const vol = Math.max(0.0, store.volume - 0.05);
+        store.setVolume(vol);
+        invoke("set_volume", { level: vol }).catch(() => {});
+        break;
+      }
+      case "seek_forward":
+        invoke("seek", { positionSecs: store.playbackPosition.position_secs + 10 }).catch(() => {});
+        break;
+      case "seek_backward":
+        invoke("seek", { positionSecs: Math.max(0, store.playbackPosition.position_secs - 10) }).catch(() => {});
+        break;
+      case "open_now_playing":
+        store.openNowPlaying();
+        break;
+      case "close_now_playing":
+        store.closeNowPlaying();
+        break;
+      case "command_palette":
+        store.openCommandPalette();
+        break;
+    }
+  });
+}
+
+export function initKeybindListener(): void {
+  window.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement
+    ) {
+      return;
+    }
+
+    const parts: string[] = [];
+    if (event.ctrlKey) parts.push("Ctrl");
+    if (event.altKey) parts.push("Alt");
+    if (event.shiftKey) parts.push("Shift");
+    if (event.metaKey) parts.push("Meta");
+    parts.push(event.code);
+
+    const combo = parts.join("+");
+    invoke("dispatch_keybind", { combo }).catch(() => {});
   });
 }

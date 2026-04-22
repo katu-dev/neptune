@@ -5,7 +5,9 @@ use tauri::{Emitter, Manager};
 use walkdir::WalkDir;
 
 use crate::{
+    bpm::BpmAnalyzer,
     db,
+    genre::GenreClassifier,
     metadata,
     types::{AppError, ScanResult},
 };
@@ -96,16 +98,25 @@ pub async fn scan_directory(
         .app_cache_dir()
         .ok();
 
+    // Retrieve BpmAnalyzer from managed state (may not be available in tests).
+    let bpm_analyzer = app_handle.try_state::<BpmAnalyzer>();
+    // Retrieve GenreClassifier from managed state (may not be available in tests).
+    let genre_classifier = app_handle.try_state::<GenreClassifier>();
+
     let mut total_indexed: u32 = 0;
     let mut total_updated: u32 = 0;
+
+    // Build a set of already-indexed paths once, before the loop.
+    let existing_paths: std::collections::HashSet<String> = db::get_all_tracks(&conn)?
+        .into_iter()
+        .map(|t| t.path)
+        .collect();
 
     for file_path in &audio_files {
         match metadata::extract_metadata(file_path, cache_dir.as_deref()) {
             Ok(mut track) => {
-                // Check whether the track already exists in the DB.
-                let existing = db::get_all_tracks(&conn)?;
                 let path_str = track.path.clone();
-                let already_exists = existing.iter().any(|t| t.path == path_str);
+                let already_exists = existing_paths.contains(&path_str);
 
                 if already_exists {
                     // Ensure missing flag is cleared for files that are present.
@@ -113,8 +124,22 @@ pub async fn scan_directory(
                     db::update_track(&conn, &track)?;
                     total_updated += 1;
                 } else {
-                    db::insert_track(&conn, &track)?;
+                    let track_id = db::insert_track(&conn, &track)?;
                     total_indexed += 1;
+
+                    // Schedule BPM analysis for newly indexed tracks with no BPM.
+                    if track.bpm.is_none() {
+                        if let Some(ref analyzer) = bpm_analyzer {
+                            analyzer.schedule(track_id, track.path.clone());
+                        }
+                    }
+
+                    // Schedule genre analysis for newly indexed tracks with no genre.
+                    if track.genre.is_none() {
+                        if let Some(ref classifier) = genre_classifier {
+                            classifier.schedule(track_id, track.path.clone());
+                        }
+                    }
                 }
             }
             Err(_) => {

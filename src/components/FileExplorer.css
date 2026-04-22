@@ -180,3 +180,24 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* Dragging state */
+.file-explorer__row--dragging {
+  opacity: 0.4;
+}
+
+/* Drag ghost overlay */
+.file-explorer__drag-ghost {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 12px;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  opacity: 0.9;
+  pointer-events: none;
+  min-width: 200px;
+  max-width: 320px;
+}

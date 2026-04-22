@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMusicStore } from "../store/index";
+import EqualizerPanel from "./EqualizerPanel";
+import CrossfadeSettings from "./CrossfadeSettings";
+import KeybindSettings from "./KeybindSettings";
+import PannerControl from "./PannerControl";
 import "./SettingsPanel.css";
 
 interface Props {
@@ -8,7 +12,22 @@ interface Props {
 }
 
 export default function SettingsPanel({ onClose }: Props) {
-  const { volume, setVolume, addToast, showDbCorruption, bumpTreeVersion } = useMusicStore();
+  const { volume, setVolume, addToast, showDbCorruption, bumpTreeVersion,
+    ambientBgEnabled, setAmbientBgEnabled,
+    discordPresenceEnabled, setDiscordPresenceEnabled,
+  } = useMusicStore();
+
+  async function handleToggleAmbientBg() {
+    const next = !ambientBgEnabled;
+    setAmbientBgEnabled(next);
+    // ambient bg is frontend-only state; no backend command needed
+  }
+
+  async function handleToggleDiscord() {
+    const next = !discordPresenceEnabled;
+    setDiscordPresenceEnabled(next);
+    invoke("set_discord_enabled", { enabled: next }).catch(() => {});
+  }
 
   async function handleAddFolder() {
     try {
@@ -92,6 +111,44 @@ export default function SettingsPanel({ onClose }: Props) {
           </section>
 
           <section>
+            <div className="settings-section__label">Visual</div>
+            <div className="settings-row">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span className="settings-row__title">Ambient Background</span>
+                  <span className="settings-row__desc">Blurs the current track's cover art as the app background.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={ambientBgEnabled}
+                  onChange={handleToggleAmbientBg}
+                  aria-label="Toggle ambient background"
+                  style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div className="settings-section__label">Integrations</div>
+            <div className="settings-row">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span className="settings-row__title">Discord Rich Presence</span>
+                  <span className="settings-row__desc">Show currently playing track in your Discord status.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={discordPresenceEnabled}
+                  onChange={handleToggleDiscord}
+                  aria-label="Toggle Discord Rich Presence"
+                  style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section>
             <div className="settings-section__label">Library</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button className="settings-btn" onClick={handleAddFolder}>
@@ -101,6 +158,26 @@ export default function SettingsPanel({ onClose }: Props) {
                 ↺ Rescan All Folders
               </button>
             </div>
+          </section>
+
+          <section>
+            <div className="settings-section__label">Panning</div>
+            <PannerControl />
+          </section>
+
+          <section>
+            <div className="settings-section__label">Equalizer</div>
+            <EqualizerPanel />
+          </section>
+
+          <section>
+            <div className="settings-section__label">Crossfade</div>
+            <CrossfadeSettings />
+          </section>
+
+          <section>
+            <div className="settings-section__label">Keybinds</div>
+            <KeybindSettings />
           </section>
 
           <section>

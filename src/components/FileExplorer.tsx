@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import { invoke } from "@tauri-apps/api/core";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { useMusicStore, type Tag, type Track } from "../store/index";
 import TagFilterBar from "./TagFilterBar";
 import "./FileExplorer.css";
@@ -68,50 +70,53 @@ interface RowData {
   onRowFocus: (index: number) => void;
 }
 
-function Row({ index, style, data }: ListChildComponentProps<RowData>) {
-  const { items, selectedTrackId, focusedIndex, decodeErrorTrackIds, tags, trackTagMap, onFolderToggle, onTrackSelect, onRowFocus } = data;
-  const item = items[index];
-  const isFocused = focusedIndex === index;
+// ─── Draggable track row ──────────────────────────────────────────────────────
 
-  const indent = item.depth * 16 + 12; // 16px per level + 12px base
+interface DraggableTrackRowProps {
+  track: Track;
+  style: React.CSSProperties;
+  indent: number;
+  isSelected: boolean;
+  isFocused: boolean;
+  hasDecodeError: boolean;
+  trackTags: Tag[];
+  onTrackSelect: (track: Track) => void;
+  onRowFocus: (index: number) => void;
+  rowIndex: number;
+}
 
-  if (item.kind === "folder") {
-    return (
-      <div
-        role="treeitem"
-        aria-expanded={item.expanded}
-        tabIndex={isFocused ? 0 : -1}
-        className={`file-explorer__row file-explorer__row--folder${isFocused ? " file-explorer__row--focused" : ""}`}
-        style={{ ...style, paddingLeft: indent }}
-        onClick={() => { onFolderToggle(item.node.path); onRowFocus(index); }}
-        onFocus={() => onRowFocus(index)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onFolderToggle(item.node.path);
-          }
-        }}
-      >
-        <span className="file-explorer__toggle" aria-hidden="true">
-          {item.expanded ? "▾" : "▸"}
-        </span>
-        <span className="file-explorer__folder-icon" aria-hidden="true">📁</span>
-        <span className="file-explorer__track-title">{item.node.name}</span>
-      </div>
-    );
-  }
+function DraggableTrackRow({
+  track,
+  style,
+  indent,
+  isSelected,
+  isFocused,
+  hasDecodeError,
+  trackTags,
+  onTrackSelect,
+  onRowFocus,
+  rowIndex,
+}: DraggableTrackRowProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `fe-${track.id}`,
+    data: { trackId: track.id, source: "file-explorer" },
+  });
 
-  // Track row
-  const { track } = item;
-  const isSelected = selectedTrackId === track.id;
-  const hasDecodeError = decodeErrorTrackIds.has(track.id);
+  const dragStyle: React.CSSProperties = {
+    ...style,
+    paddingLeft: indent,
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    cursor: isDragging ? "grabbing" : "grab",
+    zIndex: isDragging ? 1 : undefined,
+  };
+
   const title = track.title ?? track.filename;
   const subtitle = [track.artist, track.album].filter(Boolean).join(" — ");
-  const trackTagIds = trackTagMap.get(track.id) ?? [];
-  const trackTags = tags.filter((t) => trackTagIds.includes(t.id));
 
   return (
     <div
+      ref={setNodeRef}
       role="treeitem"
       aria-selected={isSelected}
       tabIndex={isFocused ? 0 : -1}
@@ -121,18 +126,21 @@ function Row({ index, style, data }: ListChildComponentProps<RowData>) {
         isSelected ? "file-explorer__row--selected" : "",
         track.missing ? "file-explorer__row--missing" : "",
         isFocused ? "file-explorer__row--focused" : "",
+        isDragging ? "file-explorer__row--dragging" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={{ ...style, paddingLeft: indent }}
-      onClick={() => { onTrackSelect(track); onRowFocus(index); }}
-      onFocus={() => onRowFocus(index)}
+      style={dragStyle}
+      onClick={() => { onTrackSelect(track); onRowFocus(rowIndex); }}
+      onFocus={() => onRowFocus(rowIndex)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           onTrackSelect(track);
         }
       }}
+      {...attributes}
+      {...listeners}
     >
       {track.missing && (
         <span className="file-explorer__missing-icon" aria-label="Missing file" title="File not found on disk">
@@ -167,6 +175,62 @@ function Row({ index, style, data }: ListChildComponentProps<RowData>) {
         </span>
       )}
     </div>
+  );
+}
+
+function Row({ index, style, data }: ListChildComponentProps<RowData>) {
+  const { items, selectedTrackId, focusedIndex, decodeErrorTrackIds, tags, trackTagMap, onFolderToggle, onTrackSelect, onRowFocus } = data;
+  const item = items[index];
+  const isFocused = focusedIndex === index;
+
+  const indent = item.depth * 16 + 12; // 16px per level + 12px base
+
+  if (item.kind === "folder") {
+    return (
+      <div
+        role="treeitem"
+        aria-expanded={item.expanded}
+        tabIndex={isFocused ? 0 : -1}
+        className={`file-explorer__row file-explorer__row--folder${isFocused ? " file-explorer__row--focused" : ""}`}
+        style={{ ...style, paddingLeft: indent }}
+        onClick={() => { onFolderToggle(item.node.path); onRowFocus(index); }}
+        onFocus={() => onRowFocus(index)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onFolderToggle(item.node.path);
+          }
+        }}
+      >
+        <span className="file-explorer__toggle" aria-hidden="true">
+          {item.expanded ? "▾" : "▸"}
+        </span>
+        <span className="file-explorer__folder-icon" aria-hidden="true">📁</span>
+        <span className="file-explorer__track-title">{item.node.name}</span>
+      </div>
+    );
+  }
+
+  // Track row — use DraggableTrackRow for drag support
+  const { track } = item;
+  const isSelected = selectedTrackId === track.id;
+  const hasDecodeError = decodeErrorTrackIds.has(track.id);
+  const trackTagIds = trackTagMap.get(track.id) ?? [];
+  const trackTags = tags.filter((t) => trackTagIds.includes(t.id));
+
+  return (
+    <DraggableTrackRow
+      track={track}
+      style={style}
+      indent={indent}
+      isSelected={isSelected}
+      isFocused={isFocused}
+      hasDecodeError={hasDecodeError}
+      trackTags={trackTags}
+      onTrackSelect={onTrackSelect}
+      onRowFocus={onRowFocus}
+      rowIndex={index}
+    />
   );
 }
 

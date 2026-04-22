@@ -1,0 +1,44 @@
+.crossfade-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.crossfade-settings__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.crossfade-settings__toggle input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.crossfade-settings__duration {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crossfade-settings__duration--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.crossfade-settings__duration-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.crossfade-settings__slider {
+  width: 100%;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}

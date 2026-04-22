@@ -73,6 +73,19 @@ impl Equalizer {
         self.bypassed = bypassed;
     }
 
+    /// Return a copy of the current per-band gain values in dB.
+    pub fn get_gains(&self) -> [f32; 8] {
+        self.gains_db
+    }
+
+    /// Reset all bands to 0 dB gain.
+    pub fn reset(&mut self) {
+        for band in 0..8 {
+            self.gains_db[band] = 0.0;
+            self.recompute_coefficients(band);
+        }
+    }
+
     pub fn process(&mut self, samples: &mut [f32], channels: usize) {
         if self.bypassed || channels == 0 {
             return;

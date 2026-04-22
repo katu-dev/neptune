@@ -1,7 +1,11 @@
+pub mod bpm;
 pub mod commands;
 pub mod crossfade;
 pub mod db;
+pub mod discord;
 pub mod eq;
+pub mod genre;
+pub mod keybinds;
 pub mod metadata;
 pub mod panner;
 pub mod player;
@@ -26,19 +30,23 @@ pub fn run() {
                 eprintln!("[lib] Failed to load queue from DB: {}", e);
             }
 
-            let player = player::Player::new_with_queue(app.handle().clone(), Some(queue_manager.clone()));
-            app.manage(std::sync::Mutex::new(player));
-
-            match watcher::Watcher::start(app.handle().clone()) {
-                Ok(w) => {
-                    app.manage(std::sync::Mutex::new(w));
-                }
-                Err(e) => {
-                    eprintln!("[lib] Failed to start watcher: {}", e);
+            // Initialize Equalizer and load persisted eq_gains from app_state.
+            let mut equalizer = eq::Equalizer::new(48000);
+            if let Ok(conn) = db::init_db(app.handle()) {
+                if let Ok(gains_str) = conn.query_row(
+                    "SELECT value FROM app_state WHERE key = 'eq_gains'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                ) {
+                    if let Ok(gains) = serde_json::from_str::<Vec<f32>>(&gains_str) {
+                        for (band, &gain) in gains.iter().enumerate().take(8) {
+                            equalizer.set_gain(band, gain);
+                        }
+                    }
                 }
             }
-
-            app.manage(queue_manager);
+            let equalizer_arc = std::sync::Arc::new(Mutex::new(equalizer));
+            app.manage(equalizer_arc.clone());
 
             // Initialize Panner and load persisted pan_value from app_state.
             let mut pan = panner::Panner::new();
@@ -53,7 +61,83 @@ pub fn run() {
                     }
                 }
             }
-            app.manage(Mutex::new(pan));
+            let panner_arc = std::sync::Arc::new(Mutex::new(pan));
+            app.manage(panner_arc.clone());
+
+            let player = player::Player::new_with_queue_and_dsp(
+                app.handle().clone(),
+                Some(queue_manager.clone()),
+                Some(equalizer_arc),
+                Some(panner_arc),
+            );
+            app.manage(std::sync::Mutex::new(player));
+
+            match watcher::Watcher::start(app.handle().clone()) {
+                Ok(w) => {
+                    app.manage(std::sync::Mutex::new(w));
+                }
+                Err(e) => {
+                    eprintln!("[lib] Failed to start watcher: {}", e);
+                }
+            }
+
+            app.manage(queue_manager);
+
+            // Initialize KeybindRegistry and load persisted keybinds.
+            let keybind_registry = keybinds::KeybindRegistry::new(app.handle().clone());
+            if let Err(e) = keybind_registry.load_from_db() {
+                eprintln!("[lib] Failed to load keybinds from DB: {}", e);
+            }
+            app.manage(keybind_registry);
+
+            // Initialize BpmAnalyzer.
+            let bpm_analyzer = bpm::BpmAnalyzer::new(app.handle().clone());
+
+            // Initialize GenreClassifier.
+            let genre_classifier = genre::GenreClassifier::new(app.handle().clone());
+
+            // At startup, schedule BPM and genre analysis for any tracks missing them.
+            if let Ok(conn) = db::init_db(app.handle()) {
+                if let Ok(tracks) = db::get_all_tracks(&conn) {
+                    for track in tracks {
+                        if track.missing {
+                            continue;
+                        }
+                        if track.bpm.is_none() {
+                            bpm_analyzer.schedule(track.id, track.path.clone());
+                        }
+                        if track.genre.is_none() {
+                            genre_classifier.schedule(track.id, track.path.clone());
+                        }
+                    }
+                }
+            }
+
+            app.manage(bpm_analyzer);
+            app.manage(genre_classifier);
+
+            // Initialize DiscordPresence and load persisted enabled state.
+            let mut discord_presence = discord::DiscordPresence::new();
+            if let Ok(conn) = db::init_db(app.handle()) {
+                if let Ok(val) = conn.query_row(
+                    "SELECT value FROM app_state WHERE key = 'discord_enabled'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                ) {
+                    if let Ok(enabled) = val.parse::<bool>() {
+                        if !enabled {
+                            discord_presence.set_enabled(false);
+                        }
+                    }
+                }
+            }
+            // Attempt initial connection; schedule reconnect if it fails.
+            if discord_presence.try_connect() {
+                // Connected — nothing more to do.
+            } else {
+                discord_presence.schedule_reconnect(app.handle().clone());
+            }
+            app.manage(Mutex::new(discord_presence));
 
             Ok(())
         })
@@ -94,9 +178,22 @@ pub fn run() {
             commands::get_queue,
             get_pan,
             set_pan,
+            get_eq_gains,
+            set_eq_gain,
+            set_eq_bypassed,
+            reset_eq,
             commands::set_crossfade_duration,
             commands::set_gapless_enabled,
             commands::get_crossfade_settings,
+            commands::analyze_bpm,
+            commands::analyze_genre,
+            keybinds::get_keybinds,
+            keybinds::set_keybind,
+            keybinds::reset_keybinds,
+            keybinds::dispatch_keybind,
+            set_discord_enabled,
+            get_discord_enabled,
+            commands::get_recommendations,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -104,7 +201,7 @@ pub fn run() {
 
 /// Return the current pan value.
 #[tauri::command]
-fn get_pan(state: tauri::State<'_, Mutex<panner::Panner>>) -> f32 {
+fn get_pan(state: tauri::State<'_, std::sync::Arc<Mutex<panner::Panner>>>) -> f32 {
     state.lock().unwrap().get_pan()
 }
 
@@ -112,7 +209,7 @@ fn get_pan(state: tauri::State<'_, Mutex<panner::Panner>>) -> f32 {
 #[tauri::command]
 fn set_pan(
     value: f32,
-    state: tauri::State<'_, Mutex<panner::Panner>>,
+    state: tauri::State<'_, std::sync::Arc<Mutex<panner::Panner>>>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), types::AppError> {
     {
@@ -127,4 +224,95 @@ fn set_pan(
     )
     .map_err(|e| types::AppError::Database(e.to_string()))?;
     Ok(())
+}
+
+/// Return the current EQ band gains as an array of 8 floats.
+#[tauri::command]
+fn get_eq_gains(state: tauri::State<'_, std::sync::Arc<Mutex<eq::Equalizer>>>) -> [f32; 8] {
+    state.lock().unwrap().get_gains()
+}
+
+/// Set the gain for a single EQ band and persist all gains to the database.
+#[tauri::command]
+fn set_eq_gain(
+    band: usize,
+    gain_db: f32,
+    state: tauri::State<'_, std::sync::Arc<Mutex<eq::Equalizer>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), types::AppError> {
+    let gains = {
+        let mut eq = state.lock().unwrap();
+        eq.set_gain(band, gain_db);
+        eq.get_gains()
+    };
+    persist_eq_gains(&app_handle, &gains)
+}
+
+/// Enable or disable the EQ bypass.
+#[tauri::command]
+fn set_eq_bypassed(
+    bypassed: bool,
+    state: tauri::State<'_, std::sync::Arc<Mutex<eq::Equalizer>>>,
+) {
+    state.lock().unwrap().set_bypassed(bypassed);
+}
+
+/// Reset all EQ bands to 0 dB and persist the flat gains.
+#[tauri::command]
+fn reset_eq(
+    state: tauri::State<'_, std::sync::Arc<Mutex<eq::Equalizer>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), types::AppError> {
+    let gains = {
+        let mut eq = state.lock().unwrap();
+        eq.reset();
+        eq.get_gains()
+    };
+    persist_eq_gains(&app_handle, &gains)
+}
+
+fn persist_eq_gains(app_handle: &tauri::AppHandle, gains: &[f32; 8]) -> Result<(), types::AppError> {
+    let json = serde_json::to_string(gains)
+        .map_err(|e| types::AppError::Database(e.to_string()))?;
+    let conn = db::init_db(app_handle)?;
+    conn.execute(
+        "INSERT INTO app_state (key, value) VALUES ('eq_gains', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![json],
+    )
+    .map_err(|e| types::AppError::Database(e.to_string()))?;
+    Ok(())
+}
+
+/// Enable or disable Discord Rich Presence and persist the setting.
+#[tauri::command]
+fn set_discord_enabled(
+    enabled: bool,
+    state: tauri::State<'_, Mutex<discord::DiscordPresence>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), types::AppError> {
+    {
+        let mut dp = state.lock().unwrap();
+        dp.set_enabled(enabled);
+        // If re-enabling, attempt to connect and schedule reconnect if needed.
+        if enabled {
+            if !dp.try_connect() {
+                dp.schedule_reconnect(app_handle.clone());
+            }
+        }
+    }
+    let conn = db::init_db(&app_handle)?;
+    conn.execute(
+        "INSERT INTO app_state (key, value) VALUES ('discord_enabled', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![enabled.to_string()],
+    )
+    .map_err(|e| types::AppError::Database(e.to_string()))?;
+    Ok(())
+}
+
+/// Return whether Discord Rich Presence is currently enabled.
+#[tauri::command]
+fn get_discord_enabled(state: tauri::State<'_, Mutex<discord::DiscordPresence>>) -> bool {
+    state.lock().unwrap().enabled
 }

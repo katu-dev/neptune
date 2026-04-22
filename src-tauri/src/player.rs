@@ -14,10 +14,12 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::crossfade::Crossfader;
 use crate::db;
+use crate::eq::Equalizer;
+use crate::panner::Panner;
 use crate::queue::QueueManager;
 use crate::types::AppError;
 
@@ -134,6 +136,17 @@ impl Player {
     /// When a track ends and the queue has a next track, the player will
     /// automatically begin playing it.
     pub fn new_with_queue(app_handle: AppHandle, queue_manager: Option<QueueManager>) -> Self {
+        Self::new_with_queue_and_dsp(app_handle, queue_manager, None, None)
+    }
+
+    /// Spawn the background decode/playback thread with an optional `QueueManager`
+    /// and shared DSP handles for EQ and Panner.
+    pub fn new_with_queue_and_dsp(
+        app_handle: AppHandle,
+        queue_manager: Option<QueueManager>,
+        equalizer: Option<Arc<Mutex<Equalizer>>>,
+        panner: Option<Arc<Mutex<Panner>>>,
+    ) -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel::<ControlMsg>(32);
         let state = Arc::new(Mutex::new(PlayerState::Stopped));
         let current_track_id: Arc<Mutex<Option<i64>>> = Arc::new(Mutex::new(None));
@@ -142,7 +155,7 @@ impl Player {
         let track_id_clone = Arc::clone(&current_track_id);
 
         std::thread::spawn(move || {
-            player_loop(rx, app_handle, state_clone, track_id_clone, queue_manager);
+            player_loop(rx, app_handle, state_clone, track_id_clone, queue_manager, equalizer, panner);
         });
 
         Player {
@@ -175,6 +188,8 @@ fn player_loop(
     state: Arc<Mutex<PlayerState>>,
     current_track_id: Arc<Mutex<Option<i64>>>,
     queue_manager: Option<QueueManager>,
+    equalizer: Option<Arc<Mutex<Equalizer>>>,
+    panner: Option<Arc<Mutex<Panner>>>,
 ) {
     let audio_buf: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(48000 * 2)));
     let volume: Arc<Mutex<f32>> = Arc::new(Mutex::new(1.0));
@@ -397,6 +412,19 @@ fn player_loop(
                                 // Reset the wall-clock anchor so interpolation
                                 // stays accurate after each decode burst.
                                 *play_started_at.lock().unwrap() = Some(Instant::now());
+                            }
+
+                            // --- Audio pipeline: EQ → Panner → Crossfader ---
+                            // Apply EQ processing
+                            if let Some(eq_arc) = &equalizer {
+                                let mut eq = eq_arc.lock().unwrap();
+                                eq.process(&mut samples, ctx.channels as usize);
+                            }
+
+                            // Apply panning
+                            if let Some(panner_arc) = &panner {
+                                let mut pan = panner_arc.lock().unwrap();
+                                pan.process(&mut samples, ctx.channels as usize);
                             }
 
                             // --- Crossfade / gapless pre-decode logic ---
@@ -1059,6 +1087,32 @@ fn build_cpal_stream(
 fn emit_state_changed(app_handle: &AppHandle, state: PlayerState, track_id: Option<i64>) {
     let _ = app_handle.emit(
         "playback_state_changed",
-        PlaybackStatePayload { state, track_id },
+        PlaybackStatePayload { state: state.clone(), track_id },
     );
+
+    // Update Discord Rich Presence based on playback state.
+    if let Some(discord_state) = app_handle.try_state::<std::sync::Mutex<crate::discord::DiscordPresence>>() {
+        let mut dp = discord_state.lock().unwrap();
+        match &state {
+            PlayerState::Playing => {
+                if let Some(tid) = track_id {
+                    // Look up track metadata for title/artist.
+                    if let Ok(conn) = crate::db::init_db(app_handle) {
+                        if let Ok(Some(track)) = crate::db::get_track_by_id(&conn, tid) {
+                            let title = track.title.as_deref().unwrap_or(&track.filename);
+                            let artist = track.artist.as_deref().unwrap_or("Unknown Artist");
+                            let ts = crate::discord::current_unix_timestamp();
+                            dp.update_playing(title, artist, ts);
+                        }
+                    }
+                }
+            }
+            PlayerState::Paused => {
+                dp.update_paused();
+            }
+            PlayerState::Stopped => {
+                dp.clear();
+            }
+        }
+    }
 }

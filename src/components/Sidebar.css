@@ -67,3 +67,68 @@
 .sidebar__add-folder-btn:hover {
   background-color: var(--color-primary-hover);
 }
+
+/* ── Generic panel overlay (Queue, Discover) ─────────────────────────────── */
+
+.sidebar-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.sidebar-panel-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sidebar-panel-overlay__panel {
+  position: relative;
+  width: 380px;
+  max-width: 90vw;
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-left: 220px; /* align after sidebar */
+}
+
+.sidebar-panel-overlay__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.sidebar-panel-overlay__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.sidebar-panel-overlay__close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.sidebar-panel-overlay__close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+}
+
+.sidebar-panel-overlay__body {
+  flex: 1;
+  overflow-y: auto;
+}

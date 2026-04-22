@@ -1,0 +1,180 @@
+.discovery-feed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  overflow: hidden;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.discovery-feed__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.discovery-feed__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+/* ─── List ───────────────────────────────────────────────────────────────── */
+
+.discovery-feed__list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+/* ─── States ─────────────────────────────────────────────────────────────── */
+
+.discovery-feed__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.discovery-feed__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+/* ─── Spinner ────────────────────────────────────────────────────────────── */
+
+.discovery-feed__spinner {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary);
+  animation: discovery-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.discovery-feed__loading .discovery-feed__spinner {
+  width: 32px;
+  height: 32px;
+}
+
+@keyframes discovery-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Track Item ─────────────────────────────────────────────────────────── */
+
+.discovery-feed__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin: 0 8px 4px 8px;
+  background: var(--color-bg-elevated);
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.discovery-feed__item:hover {
+  background: #2a2a38;
+}
+
+/* ─── Track Info ─────────────────────────────────────────────────────────── */
+
+.discovery-feed__track-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.discovery-feed__track-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discovery-feed__track-artist {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Play Next Button ───────────────────────────────────────────────────── */
+
+.discovery-feed__play-next-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.discovery-feed__play-next-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-primary);
+}
+
+.discovery-feed__play-next-btn:active {
+  transform: scale(0.95);
+}
+
+.discovery-feed__play-next-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+
+.discovery-feed__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.discovery-feed__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.discovery-feed__list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.discovery-feed__list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

@@ -1,0 +1,241 @@
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  overflow: hidden;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.queue-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.queue-panel__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.queue-panel__count {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* ─── List ───────────────────────────────────────────────────────────────── */
+
+.queue-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.queue-panel__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+/* ─── Queue Item ─────────────────────────────────────────────────────────── */
+
+.queue-panel__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 0 8px 4px 8px;
+  background: var(--color-bg-elevated);
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  cursor: default;
+}
+
+.queue-panel__item:hover {
+  background: #2a2a38;
+}
+
+.queue-panel__item--current {
+  background: rgba(99, 102, 241, 0.15);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 13px;
+}
+
+.queue-panel__item--dragging {
+  opacity: 0.5;
+}
+
+.queue-panel__item--ghost {
+  background: var(--color-bg-elevated);
+  opacity: 0.85;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: grabbing;
+}
+
+/* ─── Drag Handle ────────────────────────────────────────────────────────── */
+
+.queue-panel__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: grab;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.queue-panel__drag-handle:hover {
+  color: var(--color-text-secondary);
+}
+
+.queue-panel__drag-handle:active {
+  cursor: grabbing;
+}
+
+.queue-panel__drag-handle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ─── Track Info ─────────────────────────────────────────────────────────── */
+
+.queue-panel__track-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-panel__track-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-panel__track-subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Actions ────────────────────────────────────────────────────────────── */
+
+.queue-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.queue-panel__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.queue-panel__action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+}
+
+.queue-panel__action-btn:active {
+  transform: scale(0.95);
+}
+
+.queue-panel__action-btn--remove:hover {
+  color: var(--color-error);
+}
+
+.queue-panel__action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ─── Drop Zones ─────────────────────────────────────────────────────────── */
+
+.queue-panel__drop-zone {
+  position: relative;
+  height: 8px;
+  margin: 0 8px;
+  transition: height 0.2s ease;
+}
+
+.queue-panel__drop-zone--active {
+  height: 48px;
+}
+
+.queue-panel__drop-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: rgba(99, 102, 241, 0.12);
+  border: 2px dashed var(--color-primary);
+  border-radius: 6px;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 500;
+  animation: queue-drop-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes queue-drop-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+
+.queue-panel__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.queue-panel__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.queue-panel__list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.queue-panel__list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

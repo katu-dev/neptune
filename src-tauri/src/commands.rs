@@ -1,8 +1,10 @@
 use std::path::Path;
 
 use crate::{
+    bpm::BpmAnalyzer,
     crossfade::CrossfadeSettings,
     db,
+    genre::GenreClassifier,
     player::Player,
     queue::QueueManager,
     scanner,
@@ -697,6 +699,161 @@ pub fn get_crossfade_settings(app_handle: tauri::AppHandle) -> Result<CrossfadeS
         crossfade_secs,
         gapless_enabled,
     })
+}
+
+// ---------------------------------------------------------------------------
+// BPM command
+// ---------------------------------------------------------------------------
+
+/// Manually trigger BPM analysis for a track.
+#[tauri::command]
+pub async fn analyze_bpm(
+    track_id: i64,
+    app_handle: tauri::AppHandle,
+    bpm_analyzer: State<'_, BpmAnalyzer>,
+) -> Result<(), AppError> {
+    let conn = db::init_db(&app_handle)?;
+    let track = db::get_track_by_id(&conn, track_id)?
+        .ok_or(AppError::TrackNotFound(track_id))?;
+
+    bpm_analyzer.schedule(track_id, track.path);
+    Ok(())
+}
+
+/// Manually trigger genre analysis for a track.
+#[tauri::command]
+pub async fn analyze_genre(
+    track_id: i64,
+    app_handle: tauri::AppHandle,
+    genre_classifier: State<'_, GenreClassifier>,
+) -> Result<(), AppError> {
+    let conn = db::init_db(&app_handle)?;
+    let track = db::get_track_by_id(&conn, track_id)?
+        .ok_or(AppError::TrackNotFound(track_id))?;
+
+    genre_classifier.schedule(track_id, track.path);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Discovery / Recommendations command
+// ---------------------------------------------------------------------------
+
+/// Return up to 20 tracks recommended based on similarity to the given track.
+///
+/// Similarity = 0.4 * bpm_score + 0.3 * genre_score + 0.3 * tag_score
+///
+/// Fallback when all scores are 0: same album_artist → same album → random.
+#[tauri::command]
+pub async fn get_recommendations(
+    track_id: i64,
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<Track>, AppError> {
+    let conn = db::init_db(&app_handle)?;
+
+    // Load the current track.
+    let current = db::get_track_by_id(&conn, track_id)?
+        .ok_or(AppError::TrackNotFound(track_id))?;
+
+    // Load tags for the current track.
+    let current_tags: std::collections::HashSet<i64> = db::get_tags_for_track(&conn, track_id)?
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
+
+    // Load all non-missing tracks (excluding the current one).
+    let all_tracks = db::get_all_tracks(&conn)?;
+    let candidates: Vec<Track> = all_tracks
+        .into_iter()
+        .filter(|t| t.id != track_id && !t.missing)
+        .collect();
+
+    // Score each candidate.
+    let mut scored: Vec<(f32, Track)> = candidates
+        .into_iter()
+        .map(|candidate| {
+            // BPM score
+            let bpm_score = match (current.bpm, candidate.bpm) {
+                (Some(a), Some(b)) => 1.0 - ((a - b).abs() / 250.0_f32).min(1.0),
+                _ => 0.0_f32,
+            };
+
+            // Genre score
+            let genre_score = match (&current.genre, &candidate.genre) {
+                (Some(a), Some(b)) if a == b => 1.0_f32,
+                (Some(_), Some(_)) => 0.0_f32,
+                _ => 0.0_f32,
+            };
+
+            // Tag score (Jaccard-like): shared / max(|tags_a|, |tags_b|, 1)
+            let candidate_tags: std::collections::HashSet<i64> =
+                db::get_tags_for_track(&conn, candidate.id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|t| t.id)
+                    .collect();
+
+            let shared = current_tags.intersection(&candidate_tags).count() as f32;
+            let max_tags = (current_tags.len().max(candidate_tags.len()).max(1)) as f32;
+            let tag_score = shared / max_tags;
+
+            let similarity = 0.4 * bpm_score + 0.3 * genre_score + 0.3 * tag_score;
+            (similarity, candidate)
+        })
+        .collect();
+
+    // Check if all scores are 0 (fallback case).
+    let all_zero = scored.iter().all(|(s, _)| *s == 0.0);
+
+    if all_zero {
+        // Fallback: same album_artist → same album → random
+        let mut result: Vec<Track> = Vec::new();
+
+        // 1. Same album_artist
+        if let Some(ref aa) = current.album_artist {
+            for (_, t) in &scored {
+                if t.album_artist.as_deref() == Some(aa.as_str()) {
+                    result.push(t.clone());
+                    if result.len() >= 20 {
+                        return Ok(result);
+                    }
+                }
+            }
+        }
+
+        // 2. Same album (not already added)
+        if let Some(ref album) = current.album {
+            let already: std::collections::HashSet<i64> = result.iter().map(|t| t.id).collect();
+            for (_, t) in &scored {
+                if !already.contains(&t.id) && t.album.as_deref() == Some(album.as_str()) {
+                    result.push(t.clone());
+                    if result.len() >= 20 {
+                        return Ok(result);
+                    }
+                }
+            }
+        }
+
+        // 3. Random (fill remaining slots)
+        if result.len() < 20 {
+            let already: std::collections::HashSet<i64> = result.iter().map(|t| t.id).collect();
+            for (_, t) in &scored {
+                if !already.contains(&t.id) {
+                    result.push(t.clone());
+                    if result.len() >= 20 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return Ok(result);
+    }
+
+    // Sort by similarity descending.
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(scored.into_iter().take(20).map(|(_, t)| t).collect())
 }
 
 /// Append a track to the end of the queue.
